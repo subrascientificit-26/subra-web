@@ -1,0 +1,62 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
+import ThemeProvider from "@/components/ThemeProvider";
+import CartProvider from "@/components/CartProvider";
+import EnquirySelectionProvider from "@/components/EnquirySelectionProvider";
+import WishlistProvider from "@/components/WishlistProvider";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Patient Catalogue - Specialty Chemicals & Lab Equipment",
+  description:
+    "Your trusted partner for high-quality specialty chemicals, laboratory reagents, instruments and lab consumables.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} theme-dark h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem("site-theme-preference");var m=s==="light"||s==="dark"?s:"dark";document.documentElement.classList.remove("theme-dark","theme-light");document.documentElement.classList.add(m==="light"?"theme-light":"theme-dark");}catch(e){document.documentElement.classList.add("theme-dark");}})();`,
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <ThemeProvider>
+          <CartProvider>
+            <EnquirySelectionProvider>
+              <WishlistProvider>{children}</WishlistProvider>
+            </EnquirySelectionProvider>
+          </CartProvider>
+        </ThemeProvider>
+
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          duration={3000}
+        />
+      </body>
+    </html>
+  );
+}

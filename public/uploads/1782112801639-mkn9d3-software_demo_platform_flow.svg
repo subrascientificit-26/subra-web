@@ -1,0 +1,55 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700">
+  <style>
+    .box { fill:#f5f5f5; stroke:#333; stroke-width:2; rx:10; ry:10; }
+    .title { font: bold 18px sans-serif; }
+    .text { font: 14px sans-serif; }
+    .arrow { stroke:#333; stroke-width:2; fill:none; marker-end:url(#m); }
+  </style>
+  <defs>
+    <marker id="m" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#333"/>
+    </marker>
+  </defs>
+
+  <text x="360" y="35" class="title">Software Demo Booking Platform Flow</text>
+
+  <rect class="box" x="40" y="70" width="280" height="220"/>
+  <text x="60" y="100" class="title">Authentication</text>
+  <text x="60" y="130" class="text">• Register (Admin/Vendor/User)</text>
+  <text x="60" y="155" class="text">• Email Verification</text>
+  <text x="60" y="180" class="text">• Login</text>
+  <text x="60" y="205" class="text">• Forgot Password</text>
+  <text x="60" y="230" class="text">• Role-based Redirect</text>
+
+  <rect class="box" x="410" y="70" width="280" height="220"/>
+  <text x="430" y="100" class="title">Admin</text>
+  <text x="430" y="130" class="text">• Dashboard</text>
+  <text x="430" y="155" class="text">• Manage Vendors</text>
+  <text x="430" y="180" class="text">• Manage Users</text>
+  <text x="430" y="205" class="text">• Payments</text>
+  <text x="430" y="230" class="text">• Platform Settings</text>
+
+  <rect class="box" x="780" y="70" width="280" height="220"/>
+  <text x="800" y="100" class="title">Vendor</text>
+  <text x="800" y="130" class="text">• Profile</text>
+  <text x="800" y="155" class="text">• Availability</text>
+  <text x="800" y="180" class="text">• Payment Settings</text>
+  <text x="800" y="205" class="text">• Create Demo Products</text>
+  <text x="800" y="230" class="text">• Manage Bookings</text>
+
+  <rect class="box" x="410" y="390" width="280" height="220"/>
+  <text x="430" y="420" class="title">User</text>
+  <text x="430" y="450" class="text">• Browse Products</text>
+  <text x="430" y="475" class="text">• View Details</text>
+  <text x="430" y="500" class="text">• Book Demo Slot</text>
+  <text x="430" y="525" class="text">• Receive Email</text>
+  <text x="430" y="550" class="text">• Join Demo</text>
+
+  <line class="arrow" x1="320" y1="180" x2="410" y2="180"/>
+  <line class="arrow" x1="690" y1="180" x2="780" y2="180"/>
+  <line class="arrow" x1="920" y1="290" x2="550" y2="390"/>
+  <line class="arrow" x1="550" y1="390" x2="550" y2="290"/>
+
+  <text x="700" y="350" class="text">Booking → Email → Demo Meeting</text>
+</svg>

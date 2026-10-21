@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  user
+}
+
+enum DocumentType {
+  COA
+  SDS
+  OTHER
+}
+
+model User {
+  id       Int    @id @default(autoincrement())
+  email    String @unique
+  password String
+  role     Role   @default(user)
+
+  name    String?
+  profile String?
+
+  emailVerified Boolean @default(false)
+
+  verificationToken  String?
+  verificationExpiry DateTime?
+
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  image       String?
+  createdAt   DateTime @default(now())
+
+  subcategories SubCategory[]
+}
+
+model SubCategory {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  image       String?
+  createdAt   DateTime @default(now())
+
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  products Product[]
+
+  @@unique([categoryId, name])
+}
+
+model Product {
+  id   Int    @id @default(autoincrement())
+  name String
+  slug String @unique
+
+  shortDescription String? @db.Text
+  description      String? @db.LongText
+
+  casNumber        String?
+  molecularFormula String?
+  molecularWeight  Float?
+
+  applications String? @db.LongText
+  safetyInfo   String? @db.LongText
+
+  price Float
+  stock Int   @default(0)
+
+  isInStock    Boolean @default(true)
+  isArGrade    Boolean @default(false)
+  isBestSeller Boolean @default(false)
+  isFeatured   Boolean @default(false)
+  isFavorite   Boolean @default(false)
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subCategoryId Int
+  subCategory   SubCategory @relation(fields: [subCategoryId], references: [id], onDelete: Restrict)
+
+  images         ProductImage[]
+  specifications ProductSpecification[]
+  documents      ProductDocument[]
+  packSizes      ProductPackSize[]
+}
+
+model ProductImage {
+  id        Int     @id @default(autoincrement())
+  imageUrl  String
+  isPrimary Boolean @default(false)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductSpecification {
+  id Int @id @default(autoincrement())
+
+  parameter String
+  value     String
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductDocument {
+  id      Int          @id @default(autoincrement())
+  name    String
+  fileUrl String
+  type    DocumentType
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductReview {
+  id Int @id @default(autoincrement())
+
+  rating  Int
+  comment String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductPackSize {
+  id Int @id @default(autoincrement())
+
+  size  String
+  price Float
+  stock Int    @default(0)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Enquiry {
+  id              Int      @id @default(autoincrement())
+  fullName        String
+  companyName     String
+  email           String
+  phoneNumber     String
+  subject         String
+  productCategory String?
+  message         String
+  fileUrl         String?
+  createdAt       DateTime @default(now())
+}
+
+model CustomRequirement {
+  id Int @id @default(autoincrement())
+
+  productName      String
+  casNo            String?
+  molecularFormula String?
+
+  purity       String
+  quantity     String
+  quantityUnit String
+
+  packSize String?
+
+  application      String
+  deliveryLocation String
+
+  detailedRequirement String
+
+  attachment String?
+
+  createdAt DateTime @default(now())
+}
+
+enum SidebarSection {
+  navbar
+  footer
+  footer_service
+  products_sidebar
+  admin
+}
+
+model SidebarItem {
+  id        Int            @id @default(autoincrement())
+  label     String
+  href      String
+  parentId  Int?
+  parent    SidebarItem?   @relation("SidebarTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  SidebarItem[]  @relation("SidebarTree")
+  sortOrder Int            @default(0)
+  isActive  Boolean        @default(true)
+  section   SidebarSection @default(navbar)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([section, parentId, sortOrder])
+}
+
+model SiteSetting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
