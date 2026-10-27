@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-allowedDevOrigins: ["206.189.129.78"],
 typescript: {
     ignoreBuildErrors: true,
   },
