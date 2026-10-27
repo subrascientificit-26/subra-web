@@ -35,7 +35,8 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
-  createdAt DateTime @default(now())
+  createdAt DateTime        @default(now())
+  reviews   ProductReview[]
 }
 
 model Category {
@@ -100,6 +101,7 @@ model Product {
   specifications ProductSpecification[]
   documents      ProductDocument[]
   packSizes      ProductPackSize[]
+  reviews        ProductReview[]
 }
 
 model ProductImage {

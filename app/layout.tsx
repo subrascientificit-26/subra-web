@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Patient Catalogue - Specialty Chemicals & Lab Equipment",
+  title: "Subra Catalogue - Specialty Chemicals & Lab Equipment",
   description:
     "Your trusted partner for high-quality specialty chemicals, laboratory reagents, instruments and lab consumables.",
 };
