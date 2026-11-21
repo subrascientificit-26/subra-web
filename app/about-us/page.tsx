@@ -3,7 +3,7 @@ import Footer from "@/components/Footer";
 import AboutUsContent from "@/components/AboutUsContent";
 
 export const metadata = {
-  title: "About Us - Patient Catalogue",
+  title: "About Us - Subra Catalogue",
   description:
     "Learn about our company, mission, and commitment to supplying quality laboratory products and specialty chemicals.",
 };
