@@ -25,14 +25,14 @@ export default function DataTablePagination({
 
   return (
     <div
-      className="flex flex-wrap items-center justify-between gap-4 border-t border-border px-4 py-3 text-muted"
+      className="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-2.5 sm:gap-4 border-t border-border px-3 sm:px-4 py-3 text-muted"
       style={{ backgroundColor: "var(--table-pagination-bg)" }}
     >
       <p className="text-xs font-medium">
         Showing {start} to {end} of {rowCount}
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
         <button
           type="button"
           onClick={() => onChangePage(currentPage - 1, rowCount)}
@@ -54,8 +54,8 @@ export default function DataTablePagination({
               aria-current={isActive ? "page" : undefined}
               className={
                 isActive
-                  ? "min-w-[34px] rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-blue-600/30"
-                  : "min-w-[34px] rounded-lg px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-surface-elevated hover:text-foreground"
+                  ? "min-w-[34px] rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+                  : "min-w-[34px] rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground/80 transition hover:bg-surface-elevated hover:text-foreground hover:border-primary"
               }
             >
               {page}

@@ -7,6 +7,8 @@ export const ROUTES = {
   applications: "/applications",
   products: "/products",
   productDetail: (id: string | number) => `/products/${id}`,
+  externalProducts: "/external-products",
+  externalProductDetail: (id: string | number) => `/external-products/${id}`,
   productsByCategory: (categoryId: string | number) =>
     `/products?category=${categoryId}`,
   customProducts: "/custom-products",
@@ -30,7 +32,9 @@ export const ROUTES = {
     dashboard: "/admin/dashboard",
     products: "/admin/products",
     productCreate: "/admin/products/create",
+    productView: (id: string | number) => `/admin/products/view/${id}`,
     productEdit: (id: string | number) => `/admin/products/edit/${id}`,
+    externalProducts: "/admin/external-products",
     categories: "/admin/categories",
     categoryEdit: (id: string | number) => `/admin/categories/edit/${id}`,
     subcategories: "/admin/subcategories",
@@ -98,6 +102,7 @@ export function buildSearchUrl(query: string, scope = "all") {
 export interface EnquiryUrlParams {
   productId?: string | number;
   productName?: string;
+  image?: string;
   casNo?: string;
   molecularFormula?: string;
   molecularWeight?: string | number;
@@ -118,6 +123,7 @@ export function buildEnquiryUrl(params?: EnquiryUrlParams) {
   const entries: Array<[keyof EnquiryUrlParams, string | number | undefined]> = [
     ["productId", params.productId],
     ["productName", params.productName],
+    ["image", params.image],
     ["casNo", params.casNo],
     ["molecularFormula", params.molecularFormula],
     ["molecularWeight", params.molecularWeight],

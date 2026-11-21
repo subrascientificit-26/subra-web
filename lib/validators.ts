@@ -1,3 +1,21 @@
+export const CAS_NUMBER_REGEX = /^\d{2,7}-\d{2}-\d$/;
+
+export const validateCasNumber = (
+  value: string,
+  options?: { required?: boolean }
+): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return options?.required ? "CAS Number is required." : null;
+  }
+
+  if (!CAS_NUMBER_REGEX.test(trimmed)) {
+    return "CAS Number format must be like 00-00-0 (2-7 digits, 2 digits, 1 digit).";
+  }
+
+  return null;
+};
+
 export const validateEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);

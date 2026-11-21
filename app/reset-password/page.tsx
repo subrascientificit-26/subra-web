@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { ROUTES } from "@/lib/routes";
 
 import { Inter } from "next/font/google";
 
@@ -63,7 +65,7 @@ export default function ResetPasswordPage() {
 
   const [loading, setLoading] =
     useState(false);
-  const { toasts, removeToast, showError, showSuccess } = useToast();
+  const { toasts, removeToast, showError } = useToast();
   const [success, setSuccess] =
     useState("");
 
@@ -152,11 +154,8 @@ export default function ResetPasswordPage() {
         setSuccess(
           "Password reset successful"
         );
-        showSuccess("Password reset successful");
-
-        setTimeout(() => {
-          router.push("/login");
-        }, 2000);
+        toast.success("Password reset successful");
+        router.push(ROUTES.login);
       } catch (err) {
         console.error(err);
 
@@ -184,7 +183,7 @@ export default function ResetPasswordPage() {
       </div>
 
       {/* CENTER */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pt-16 pb-6">
 
         <div className={AUTH_CARD_CLASS}>
 
@@ -271,7 +270,7 @@ export default function ResetPasswordPage() {
                         passwordRules.number,
                         passwordRules.special,
                       ][i]
-                        ? "text-green-400"
+                        ? "text-green-700 font-medium theme-dark:text-green-400"
                         : ""
                     }
                   `}

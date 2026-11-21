@@ -1,32 +1,77 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ExternalLink,
   Plus,
   Save,
   Trash2,
   FileText,
+  ImagePlus,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
 import { RequiredMark } from "@/components/ui/FieldLabel";
+import SimpleImageUpload from "@/components/admin/SimpleImageUpload";
 import {
+  ALLOWED_PRODUCT_IMAGE_ACCEPT,
   getGalleryImagesFromList,
   getPrimaryImageFromList,
+  validateProductImageFile,
 } from "@/lib/productImageUtils";
 import { resolveProductImageUrl } from "@/lib/productImageUrl";
+import { DEFAULT_PRODUCT_IMAGE } from "@/lib/products";
 import { normalizeDocumentType } from "@/lib/productDocumentTypes";
+import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
+import { ROUTES } from "@/lib/routes";
+import { validateCasNumber } from "@/lib/validators";
 import {
   ADMIN_FORM_CARD_CLASS,
   ADMIN_FORM_INPUT_CLASS,
   ADMIN_FORM_TEXTAREA_CLASS,
   ADMIN_LABEL_CLASS,
   ADMIN_SECONDARY_BTN_CLASS,
+  withFieldError,
 } from "@/lib/admin/formStyles";
+
+type GalleryItem = {
+  id: string;
+  existingImageId?: number;
+  file?: File;
+  previewUrl: string;
+};
+
+type CategoryOption = {
+  id: number | string;
+  name: string;
+};
+
+type SubcategoryOption = {
+  id: number | string;
+  name: string;
+  categoryId: number | string;
+};
+
+type SpecItem = {
+  test: string;
+  result: string;
+  parameter?: string;
+  value?: string;
+};
+
+type DocItem = {
+  label: string;
+  name: string;
+  fileUrl?: string;
+  type?: string;
+  file?: File;
+};
 
 export default function ProductFormPage() {
   const router = useRouter();
@@ -41,11 +86,11 @@ export default function ProductFormPage() {
   const disabled = isView;
 
   // Operational States
-  const [categories, setCategories] = useState<any[]>([]);
-  const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [subcategories, setSubcategories] = useState<SubcategoryOption[]>([]);
   const [pageLoading, setPageLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { toasts, removeToast, showError, showSuccess } = useToast();
+  const { toasts, removeToast, showError } = useToast();
 
   // Core Product Payload Fields
   const [name, setName] = useState("");
@@ -54,21 +99,26 @@ export default function ProductFormPage() {
   const [applications, setApplications] = useState("");
   const [safetyInfo, setSafetyInfo] = useState("");
   const [casNumber, setCasNumber] = useState("");
+  const [casError, setCasError] = useState("");
+  const [casTouched, setCasTouched] = useState(false);
   const [molecularFormula, setMolecularFormula] = useState("");
   const [molecularWeight, setMolecularWeight] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [subCategoryId, setSubCategoryId] = useState("");
-  const [specifications, setSpecifications] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [specifications, setSpecifications] = useState<SpecItem[]>([]);
+  const [documents, setDocuments] = useState<DocItem[]>([]);
 
   // Isolated State Architecture for Assets
   const [singleImageFile, setSingleImageFile] = useState<File | null>(null);
   const [singleImagePreview, setSingleImagePreview] = useState<string>("");
-  const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>([]);
-  const [imagesFiles, setImagesFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [removePrimaryImage, setRemovePrimaryImage] = useState(false);
+  const [primaryImageError, setPrimaryImageError] = useState("");
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [galleryImageError, setGalleryImageError] = useState("");
+  const [galleryDragging, setGalleryDragging] = useState(false);
+  const blobUrlsRef = useRef<Set<string>>(new Set());
 
   const [packSize, setPackSize] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -83,167 +133,211 @@ export default function ProductFormPage() {
   const [newDocLabel, setNewDocLabel] = useState("");
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
 
+  const registerBlobUrl = useCallback((url: string) => {
+    blobUrlsRef.current.add(url);
+    return url;
+  }, []);
+
+  const revokeBlobUrl = useCallback((url?: string | null) => {
+    if (url && url.startsWith("blob:")) {
+      URL.revokeObjectURL(url);
+      blobUrlsRef.current.delete(url);
+    }
+  }, []);
+
+  const revokeAllBlobUrls = useCallback(() => {
+    blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    blobUrlsRef.current.clear();
+  }, []);
+
   // Type-robust subcategory filtering matching both String and Number formats
   const filteredSubcategories = categoryId
     ? subcategories.filter(
-        (item: any) => String(item.categoryId) === String(categoryId),
+        (item) => String(item.categoryId) === String(categoryId),
       )
-    : subcategories;
+    : [];
 
   useEffect(() => {
+    let active = true;
+
+    const loadInitialData = async () => {
+      try {
+        setPageLoading(true);
+        revokeAllBlobUrls();
+
+        if (isCreate) {
+          setName("");
+          setDescription("");
+          setShortDescription("");
+          setApplications("");
+          setSafetyInfo("");
+          setCasNumber("");
+          setCasError("");
+          setCasTouched(false);
+          setMolecularFormula("");
+          setMolecularWeight("");
+          setPrice("");
+          setStock("");
+          setCategoryId("");
+          setSubCategoryId("");
+          setSpecifications([]);
+          setDocuments([]);
+          setSingleImageFile(null);
+          setSingleImagePreview("");
+          setRemovePrimaryImage(false);
+          setPrimaryImageError("");
+          setGalleryItems([]);
+          setGalleryImageError("");
+          setPackSize("");
+          setQuantity("");
+          setUnits("");
+          setArGrade(false);
+          setInStock(true);
+          setBestSeller(false);
+        }
+
+        const [catRes, subRes, productRes] = await Promise.all([
+          fetch("/api/category", { cache: "no-store" }),
+          fetch("/api/subcategory", { cache: "no-store" }),
+          (isEdit || isView) && id
+            ? fetch(`/api/products/${id}`, { cache: "no-store" })
+            : Promise.resolve(null),
+        ]);
+
+        if (!active) return;
+
+        if (catRes.ok) setCategories(await catRes.json());
+        if (subRes.ok) setSubcategories(await subRes.json());
+
+        if (productRes) {
+          const product = await productRes.json();
+          if (!active) return;
+
+          if (!productRes.ok) {
+            toast.error(product.error || "Failed to load product");
+            return;
+          }
+
+          if (product) {
+            const loadedCas = product.casNumber || "";
+            setName(product.name || "");
+            setDescription(product.description || "");
+            setShortDescription(product.shortDescription || "");
+            setApplications(product.applications || "");
+            setSafetyInfo(product.safetyInfo || "");
+            setCasNumber(loadedCas);
+            setCasTouched(false);
+            setCasError(
+              loadedCas && !disabled ? validateCasNumber(loadedCas) || "" : ""
+            );
+            setMolecularFormula(product.molecularFormula || "");
+            setMolecularWeight(
+              product.molecularWeight != null ? String(product.molecularWeight) : ""
+            );
+            setPrice(String(product.price ?? ""));
+            setStock(String(product.stock ?? ""));
+            setCategoryId(String(product.subCategory?.categoryId || ""));
+            setSubCategoryId(String(product.subCategoryId || ""));
+            setSpecifications(
+              (product.specifications || []).map((spec: { parameter?: string; value?: string; test?: string; result?: string }) => ({
+                test: spec.parameter || spec.test || "",
+                result: spec.value || spec.result || "",
+              }))
+            );
+            setDocuments(
+              (product.documents || []).map((doc: { name?: string; label?: string; fileUrl?: string; type?: string }) => ({
+                label: doc.name || doc.label || "",
+                name: doc.name || doc.label || "Document",
+                fileUrl: doc.fileUrl,
+                type: normalizeDocumentType(doc.type, doc.name || doc.label || ""),
+              }))
+            );
+
+            const primaryImage = getPrimaryImageFromList(product.images || []);
+            const galleryImages = getGalleryImagesFromList(product.images || []);
+
+            const resolvedUrl = primaryImage?.imageUrl
+              ? resolveProductImageUrl(primaryImage.imageUrl)
+              : "";
+
+            setSingleImagePreview(resolvedUrl);
+            setSingleImageFile(null);
+            setRemovePrimaryImage(false);
+            setPrimaryImageError("");
+
+            setGalleryItems(
+              galleryImages
+                .filter((img) => Boolean(img.imageUrl))
+                .map((img, index) => ({
+                  id: `existing-${img.id ?? index}`,
+                  existingImageId: typeof img.id === "number" ? img.id : undefined,
+                  previewUrl: resolveProductImageUrl(img.imageUrl),
+                }))
+            );
+            setGalleryImageError("");
+
+            const firstPackSize = product.packSizes?.[0];
+            if (firstPackSize?.size) {
+              const knownUnits = ["mg", "g", "kg", "ml", "L"];
+              const parts = firstPackSize.size.trim().split(/\s+/);
+              const lastPart = parts[parts.length - 1];
+
+              if (knownUnits.includes(lastPart)) {
+                setUnits(lastPart);
+                setPackSize(parts.slice(0, -1).join(" "));
+              } else {
+                setPackSize(firstPackSize.size);
+                setUnits("");
+              }
+            } else {
+              setPackSize("");
+              setUnits("");
+            }
+
+            setQuantity(firstPackSize ? String(firstPackSize.stock ?? "") : "");
+            setArGrade(Boolean(product.isArGrade));
+            setInStock(product.isInStock !== false);
+            setBestSeller(product.isBestSeller || false);
+          }
+        }
+      } catch {
+        if (active) {
+          toast.error("Failed to load product details");
+        }
+      } finally {
+        if (active) {
+          setPageLoading(false);
+        }
+      }
+    };
+
     loadInitialData();
-  }, [id, isEdit, isView]);
+
+    return () => {
+      active = false;
+    };
+  }, [id, isCreate, isEdit, isView, disabled, revokeAllBlobUrls]);
+
+  useLiveUpdates(["categories", "subcategories"], () => {
+    void Promise.all([
+      fetch("/api/category", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (Array.isArray(data)) setCategories(data);
+        }),
+      fetch("/api/subcategory", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (Array.isArray(data)) setSubcategories(data);
+        }),
+    ]).catch(() => {});
+  });
 
   useEffect(() => {
     return () => {
-      if (singleImagePreview && singleImagePreview.startsWith("blob:")) {
-        URL.revokeObjectURL(singleImagePreview);
-      }
-      imagePreviews.forEach((url) => {
-        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
-      });
+      revokeAllBlobUrls();
     };
-  }, []);
-
-  const loadInitialData = async () => {
-    try {
-      setPageLoading(true);
-
-      if (isCreate) {
-        setName("");
-        setDescription("");
-        setShortDescription("");
-        setApplications("");
-        setSafetyInfo("");
-        setCasNumber("");
-        setMolecularFormula("");
-        setMolecularWeight("");
-        setPrice("");
-        setStock("");
-        setCategoryId("");
-        setSubCategoryId("");
-        setSpecifications([]);
-        setDocuments([]);
-        setSingleImageFile(null);
-        setSingleImagePreview("");
-        setExistingGalleryUrls([]);
-        setImagesFiles([]);
-        setImagePreviews([]);
-        setPackSize("");
-        setQuantity("");
-        setUnits("");
-        setArGrade(false);
-        setInStock(true);
-        setBestSeller(false);
-      }
-
-      const [catRes, subRes] = await Promise.all([
-        fetch("/api/category", { cache: "force-cache" }),
-        fetch("/api/subcategory", { cache: "force-cache" }),
-      ]);
-
-      if (catRes.ok) setCategories(await catRes.json());
-      if (subRes.ok) setSubcategories(await subRes.json());
-
-      if ((isEdit || isView) && id) {
-        const productRes = await fetch(`/api/products/${id}`, {
-          cache: "no-store",
-        });
-        const product = await productRes.json();
-
-        if (!productRes.ok) {
-          showError(product.error || "Failed to load product");
-          return;
-        }
-
-        if (product) {
-          setName(product.name || "");
-          setDescription(product.description || "");
-          setShortDescription(product.shortDescription || "");
-          setApplications(product.applications || "");
-          setSafetyInfo(product.safetyInfo || "");
-          setCasNumber(product.casNumber || "");
-          setMolecularFormula(product.molecularFormula || "");
-          setMolecularWeight(
-            product.molecularWeight != null ? String(product.molecularWeight) : ""
-          );
-          setPrice(String(product.price ?? ""));
-          setStock(String(product.stock ?? ""));
-          setCategoryId(String(product.subCategory?.categoryId || ""));
-          setSubCategoryId(String(product.subCategoryId || ""));
-          setSpecifications(
-            (product.specifications || []).map((spec: { parameter?: string; value?: string; test?: string; result?: string }) => ({
-              test: spec.parameter || spec.test || "",
-              result: spec.value || spec.result || "",
-            }))
-          );
-          setDocuments(
-            (product.documents || []).map((doc: { name?: string; label?: string; fileUrl?: string; type?: string }) => ({
-              label: doc.name || doc.label || "",
-              name: doc.name || doc.label || "Document",
-              fileUrl: doc.fileUrl,
-              type: normalizeDocumentType(doc.type, doc.name || doc.label || ""),
-            }))
-          );
-
-          const primaryImage = getPrimaryImageFromList(product.images || []);
-          const galleryImages = getGalleryImagesFromList(product.images || []);
-
-          const resolvedUrl = primaryImage?.imageUrl
-          ? resolveProductImageUrl(primaryImage.imageUrl)
-          : "";
-        
-        console.log("DB image:", primaryImage?.imageUrl);
-        console.log("Resolved URL:", resolvedUrl);
-        console.log(product.images);
-        setSingleImagePreview(resolvedUrl);
-          setExistingGalleryUrls(
-            galleryImages
-              .map((img) =>
-                img.imageUrl ? resolveProductImageUrl(img.imageUrl) : ""
-              )
-              .filter(Boolean)
-          );
-          setImagePreviews(
-            galleryImages
-              .map((img) =>
-                img.imageUrl ? resolveProductImageUrl(img.imageUrl) : ""
-              )
-              .filter(Boolean)
-          );
-          setImagesFiles([]);
-          setSingleImageFile(null);
-
-          const firstPackSize = product.packSizes?.[0];
-          if (firstPackSize?.size) {
-            const knownUnits = ["mg", "g", "kg", "ml", "L"];
-            const parts = firstPackSize.size.trim().split(/\s+/);
-            const lastPart = parts[parts.length - 1];
-
-            if (knownUnits.includes(lastPart)) {
-              setUnits(lastPart);
-              setPackSize(parts.slice(0, -1).join(" "));
-            } else {
-              setPackSize(firstPackSize.size);
-              setUnits("");
-            }
-          } else {
-            setPackSize("");
-            setUnits("");
-          }
-
-          setQuantity(firstPackSize ? String(firstPackSize.stock ?? "") : "");
-          setArGrade(Boolean(product.isArGrade));
-          setInStock(product.isInStock !== false);
-          setBestSeller(product.isBestSeller || false);
-        }
-      }
-    } catch {
-      showError("Failed to load configuration configurations");
-    } finally {
-      setPageLoading(false);
-    }
-  };
+  }, [revokeAllBlobUrls]);
 
   const validateForm = (): boolean => {
     if (!name.trim()) {
@@ -266,14 +360,11 @@ export default function ProductFormPage() {
       return false;
     }
 
-    if (!casNumber.trim()) {
-      showError("CAS Number required.");
-      return false;
-    }
-
-    const casRegex = /^\d{2,7}-\d{2}-\d$/;
-    if (!casRegex.test(casNumber.trim())) {
-      showError("CAS Number format should be like 67-64-1");
+    const casValidationError = validateCasNumber(casNumber, { required: true });
+    if (casValidationError) {
+      setCasTouched(true);
+      setCasError(casValidationError);
+      showError(casValidationError);
       return false;
     }
 
@@ -287,34 +378,42 @@ export default function ProductFormPage() {
       return false;
     }
 
-    const maxFileSize = 5 * 1024 * 1024;
-
-    if (singleImageFile && singleImageFile.size > maxFileSize) {
-      showError("Primary image must be less than 5MB.");
-      return false;
+    if (singleImageFile) {
+      const primaryError = validateProductImageFile(singleImageFile, "Main image");
+      if (primaryError) {
+        setPrimaryImageError(primaryError);
+        showError(primaryError);
+        return false;
+      }
     }
 
-    const invalidGallery = imagesFiles.some((file) => file.size > maxFileSize);
-    if (invalidGallery) {
-      showError("Gallery image size must be less than 5MB.");
-      return false;
+    for (const item of galleryItems) {
+      if (item.file) {
+        const galleryError = validateProductImageFile(item.file, "Gallery image");
+        if (galleryError) {
+          setGalleryImageError(galleryError);
+          showError(galleryError);
+          return false;
+        }
+      }
     }
 
     return true;
   };
 
   const handleSave = async () => {
+    if (isView) return;
     if (!validateForm()) return;
 
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append("name", name);
-      formData.append("description", description);
+      formData.append("name", name.trim());
+      formData.append("description", description.trim());
       formData.append("shortDescription", shortDescription);
       formData.append("applications", applications);
       formData.append("safetyInfo", safetyInfo);
-      formData.append("casNumber", casNumber);
+      formData.append("casNumber", casNumber.trim());
       formData.append("molecularFormula", molecularFormula);
       formData.append("molecularWeight", molecularWeight);
       formData.append("price", price.trim() || "0");
@@ -350,11 +449,27 @@ export default function ProductFormPage() {
         )
       );
 
+      if (isEdit) {
+        if (removePrimaryImage && !singleImageFile) {
+          formData.append("removePrimaryImage", "true");
+        }
+        formData.append(
+          "keptGalleryImageIds",
+          JSON.stringify(
+            galleryItems
+              .map((item) => item.existingImageId)
+              .filter((value): value is number => typeof value === "number")
+          )
+        );
+      }
+
       if (singleImageFile) {
         formData.append("primaryImage", singleImageFile);
       }
-      imagesFiles.forEach((file) => {
-        formData.append("galleryImages", file);
+      galleryItems.forEach((item) => {
+        if (item.file) {
+          formData.append("galleryImages", item.file);
+        }
       });
       documents.forEach((doc, idx) => {
         if (doc.file) formData.append(`document_${idx}`, doc.file);
@@ -370,10 +485,12 @@ export default function ProductFormPage() {
         throw new Error(data.error || "Failed to save product");
       }
 
-      showSuccess(isCreate ? "Product created successfully" : "Product updated successfully");
-      setTimeout(() => router.push("/admin/products"), 1500);
-    } catch (err: any) {
-      showError(err.message || "Execution error encountered");
+      toast.success(isCreate ? "Product created successfully" : "Product updated successfully");
+      router.push(ROUTES.admin.products);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Execution error encountered";
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -426,78 +543,119 @@ export default function ProductFormPage() {
   };
 
   // Image Streams Setup Handles
-  const handlePrimaryImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (singleImagePreview && singleImagePreview.startsWith("blob:")) {
-        URL.revokeObjectURL(singleImagePreview);
-      }
-      setSingleImageFile(file);
-      setSingleImagePreview(URL.createObjectURL(file));
+  const handlePrimaryFileSelect = (file: File | null) => {
+    if (!file) return;
+
+    const validationError = validateProductImageFile(file, "Main image");
+    if (validationError) {
+      setPrimaryImageError(validationError);
+      showError(validationError);
+      return;
     }
+
+    revokeBlobUrl(singleImagePreview);
+    setPrimaryImageError("");
+    setSingleImageFile(file);
+    setSingleImagePreview(registerBlobUrl(URL.createObjectURL(file)));
+    setRemovePrimaryImage(false);
   };
 
   const handleRemovePrimaryImage = () => {
-    if (singleImagePreview && singleImagePreview.startsWith("blob:")) {
-      URL.revokeObjectURL(singleImagePreview);
-    }
+    revokeBlobUrl(singleImagePreview);
     setSingleImageFile(null);
     setSingleImagePreview("");
+    setPrimaryImageError("");
+    setRemovePrimaryImage(true);
+  };
+
+  const addGalleryFiles = (files: File[]) => {
+    if (files.length === 0) return;
+
+    const validItems: GalleryItem[] = [];
+    let firstError = "";
+
+    for (const file of files) {
+      const validationError = validateProductImageFile(file, "Gallery image");
+      if (validationError) {
+        if (!firstError) firstError = validationError;
+        continue;
+      }
+
+      const previewUrl = registerBlobUrl(URL.createObjectURL(file));
+      validItems.push({
+        id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        previewUrl,
+      });
+    }
+
+    if (validItems.length > 0) {
+      setGalleryItems((prev) => [...prev, ...validItems]);
+    }
+
+    if (firstError) {
+      setGalleryImageError(firstError);
+      showError(firstError);
+    } else {
+      setGalleryImageError("");
+    }
   };
 
   const handleGalleryImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      setImagesFiles((prev) => [...prev, ...files]);
-      const newPreviews = files.map((file) => URL.createObjectURL(file));
-      setImagePreviews((prev) => [...prev, ...newPreviews]);
-    }
+    e.target.value = "";
+    addGalleryFiles(files);
   };
 
-  const handleRemoveGalleryImage = (indexToRemove: number) => {
-    const previewUrl = imagePreviews[indexToRemove];
-    const existingCount = existingGalleryUrls.length;
+  const handleGalleryDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setGalleryDragging(false);
+    if (disabled) return;
+    addGalleryFiles(Array.from(e.dataTransfer.files || []));
+  };
 
-    if (indexToRemove < existingCount) {
-      setExistingGalleryUrls((prev) => prev.filter((_, i) => i !== indexToRemove));
-    } else {
-      const fileIndex = indexToRemove - existingCount;
-      if (previewUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(previewUrl);
+  const handleRemoveGalleryImage = (itemId: string) => {
+    setGalleryItems((prev) => {
+      const target = prev.find((item) => item.id === itemId);
+      if (target) {
+        revokeBlobUrl(target.previewUrl);
       }
-      setImagesFiles((prev) => prev.filter((_, i) => i !== fileIndex));
-    }
-
-    setImagePreviews((prev) => prev.filter((_, i) => i !== indexToRemove));
+      return prev.filter((item) => item.id !== itemId);
+    });
+    setGalleryImageError("");
   };
 
   const cardClass = `${ADMIN_FORM_CARD_CLASS} hover:border-border`;
   const labelClass = ADMIN_LABEL_CLASS;
-  const inputClass = ADMIN_FORM_INPUT_CLASS;
-  const textareaClass = ADMIN_FORM_TEXTAREA_CLASS;
+  const viewFieldOverride = isView
+    ? "disabled:opacity-95 disabled:cursor-default"
+    : "";
+  const inputClass = `${ADMIN_FORM_INPUT_CLASS} ${viewFieldOverride}`.trim();
+  const textareaClass = `${ADMIN_FORM_TEXTAREA_CLASS} ${viewFieldOverride}`.trim();
 
   if (pageLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-blue-500" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background text-foreground antialiased selection:bg-blue-500/30">
-      <header className="backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <header className="bg-surface/90 border-b border-border backdrop-blur-md sticky top-0 z-30">
+        <div className={`${PAGE_CONTAINER_CLASS} h-16 flex items-center justify-between gap-2 sm:gap-4`}>
+          <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
             <Link
               href="/admin/products"
-              className="h-10 w-10 rounded-lg bg-surface border border-border flex items-center justify-center text-muted hover:text-foreground hover:border-primary transition-all"
+              className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-lg bg-surface border border-border flex items-center justify-center text-muted hover:text-foreground hover:border-primary transition-all"
             >
               <ArrowLeft size={16} />
             </Link>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight">
+                <h1 className="text-base sm:text-xl font-bold tracking-tight truncate">
                   {isCreate && "Create Product"}
                   {isEdit && "Edit Product"}
                   {isView && "Product Information"}
@@ -510,7 +668,7 @@ export default function ProductFormPage() {
             <button
               onClick={handleSave}
               disabled={loading}
-              className="h-11 px-5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-semibold tracking-wide text-white flex items-center gap-2 shadow-lg shadow-blue-600/10 transition-all active:scale-[0.98]"
+              className="h-10 sm:h-11 px-3 sm:px-5 shrink-0 whitespace-nowrap rounded-lg bg-primary hover:bg-primary-hover disabled:opacity-40 text-xs sm:text-sm font-semibold tracking-wide text-white flex items-center gap-2 shadow-sm transition-all active:scale-[0.98]"
             >
               {loading ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
@@ -529,12 +687,12 @@ export default function ProductFormPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-6">
+      <main className={`${PAGE_CONTAINER_CLASS} py-4 sm:py-6`}>
         <ToastContainer toasts={toasts} onClose={removeToast} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ================= LEFT COLUMN ================= */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="min-w-0 lg:col-span-2 space-y-6">
             {/* Product Information */}
             <div className={cardClass}>
               <h2 className="text-sm font-bold uppercase text-foreground mb-5 border-b border-border pb-3">
@@ -565,10 +723,33 @@ export default function ProductFormPage() {
                     <input
                       disabled={disabled}
                       value={casNumber}
-                      onChange={(e) => setCasNumber(e.target.value)}
-                      className={inputClass}
-                      placeholder="67-64-1"
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setCasNumber(nextValue);
+                        if (casTouched || casError) {
+                          setCasError(
+                            validateCasNumber(nextValue, { required: true }) || ""
+                          );
+                        }
+                      }}
+                      onBlur={() => {
+                        setCasTouched(true);
+                        setCasError(
+                          validateCasNumber(casNumber, { required: true }) || ""
+                        );
+                      }}
+                      className={withFieldError(inputClass, Boolean(casError))}
+                      placeholder="e.g. 67-64-1"
                     />
+                    {casError ? (
+                      <p className="mt-1.5 text-xs font-medium text-red-600 theme-dark:text-red-400">
+                        {casError}
+                      </p>
+                    ) : !disabled ? (
+                      <p className="mt-1.5 text-xs text-muted">
+                        Format: 2-7 digits, 2 digits, 1 digit (e.g. 00-00-0 or 67-64-1)
+                      </p>
+                    ) : null}
                   </div>
 
                   <div>
@@ -686,10 +867,10 @@ export default function ProductFormPage() {
               {specifications.length === 0 ? (
                 <p className="text-sm text-muted italic py-2">No specifications added yet.</p>
               ) : (
-                <div className="overflow-hidden rounded-lg border border-border">
+                <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
-                      <tr className="bg-surface border-b border-border text-muted font-medium">
+                      <tr className="bg-surface-elevated border-b border-border text-muted font-medium">
                         <th className="px-4 py-3">Test</th>
                         <th className="px-4 py-3">Specification Requirement</th>
                         {!disabled && <th className="px-4 py-3 text-right w-20">Actions</th>}
@@ -707,7 +888,7 @@ export default function ProductFormPage() {
                               <button
                                 type="button"
                                 onClick={() => removeSpecification(index)}
-                                className="text-muted hover:text-red-400 p-1 transition-colors"
+                                className="text-muted hover:text-red-600 theme-dark:hover:text-red-400 p-1 transition-colors"
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -740,14 +921,20 @@ export default function ProductFormPage() {
                   </div>
                   <div>
                     <label className={labelClass}>Upload Attachment</label>
-                    <div className="relative">
+                    <div className="relative overflow-hidden rounded-lg">
                       <input
                         type="file"
-                        onChange={(e) => setNewDocFile(e.target.files?.[0] || null)}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          e.target.value = "";
+                          setNewDocFile(file);
+                        }}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       />
-                      <div className={`${inputClass} flex items-center text-muted truncate pr-4`}>
-                        {newDocFile ? newDocFile.name : "Choose File..."}
+                      <div className={`${inputClass} flex items-center text-muted pr-4`}>
+                        <span className="truncate">
+                          {newDocFile ? newDocFile.name : "Choose File..."}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -768,24 +955,36 @@ export default function ProductFormPage() {
                   {documents.map((doc, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface text-sm hover:border-primary transition-colors"
+                      className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface-elevated text-sm hover:border-primary transition-colors"
                     >
                       <div className="flex items-center gap-3 truncate min-w-0">
-                        <FileText className="text-blue-500 flex-shrink-0" size={18} />
+                        <FileText className="text-primary flex-shrink-0" size={18} />
                         <div className="truncate">
                           <p className="font-medium text-foreground truncate">{doc.label}</p>
                           <p className="text-xs text-muted truncate">{doc.name || "Remote File Layout Entity"}</p>
                         </div>
                       </div>
-                      {!disabled && (
-                        <button
-                          type="button"
-                          onClick={() => removeDocument(index)}
-                          className="text-muted hover:text-red-400 p-2 transition-colors ml-4"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                        {doc.fileUrl ? (
+                          <a
+                            href={doc.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-primary hover:border-primary/50 transition-colors"
+                          >
+                            View <ExternalLink size={12} />
+                          </a>
+                        ) : null}
+                        {!disabled && (
+                          <button
+                            type="button"
+                            onClick={() => removeDocument(index)}
+                            className="text-muted hover:text-red-600 theme-dark:hover:text-red-400 p-2 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -794,7 +993,7 @@ export default function ProductFormPage() {
           </div>
 
           {/* ================= RIGHT COLUMN ================= */}
-          <div className="space-y-6 lg:sticky lg:top-24 self-start">
+          <div className="min-w-0 space-y-6 lg:sticky lg:top-24 self-start">
             {/* Purchase Information */}
             <div className={cardClass}>
               <h2 className="text-sm font-bold uppercase text-foreground mb-5 border-b border-border pb-3">
@@ -817,7 +1016,7 @@ export default function ProductFormPage() {
                     className={`${inputClass} appearance-none`}
                   >
                     <option value="">Select Category</option>
-                    {categories.map((cat: any) => (
+                    {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>
                         {cat.name}
                       </option>
@@ -825,25 +1024,31 @@ export default function ProductFormPage() {
                   </select>
                 </div>
 
-                <div>
-                  <label className={labelClass}>
-                    Sub Category
-                    <RequiredMark />
-                  </label>
-                  <select
-                    disabled={disabled}
-                    value={subCategoryId}
-                    onChange={(e) => setSubCategoryId(e.target.value)}
-                    className={`${inputClass} appearance-none`}
-                  >
-                    <option value="">Select Sub Category</option>
-                    {filteredSubcategories.map((item: any) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
+                {(categoryId || isView) && (
+                  <div>
+                    <label className={labelClass}>
+                      Sub Category
+                      <RequiredMark />
+                    </label>
+                    <select
+                      disabled={disabled || !categoryId}
+                      value={subCategoryId}
+                      onChange={(e) => setSubCategoryId(e.target.value)}
+                      className={`${inputClass} appearance-none`}
+                    >
+                      <option value="">
+                        {filteredSubcategories.length > 0
+                          ? "Select Sub Category"
+                          : "No sub categories available"}
                       </option>
-                    ))}
-                  </select>
-                </div>
+                      {filteredSubcategories.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <input
@@ -908,7 +1113,11 @@ export default function ProductFormPage() {
               </h2>
 
               <div className="flex flex-col gap-3">
-                <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-surface-elevated transition-colors">
+                <label
+                  className={`flex items-center gap-3 p-3 rounded-lg border border-border transition-colors ${
+                    disabled ? "cursor-default" : "cursor-pointer hover:bg-surface-elevated"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={arGrade}
@@ -919,7 +1128,11 @@ export default function ProductFormPage() {
                   <span className="text-sm text-foreground">AR Grade</span>
                 </label>
 
-                <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-surface-elevated transition-colors">
+                <label
+                  className={`flex items-center gap-3 p-3 rounded-lg border border-border transition-colors ${
+                    disabled ? "cursor-default" : "cursor-pointer hover:bg-surface-elevated"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={inStock}
@@ -930,7 +1143,11 @@ export default function ProductFormPage() {
                   <span className="text-sm text-foreground">In Stock</span>
                 </label>
 
-                <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-surface-elevated transition-colors">
+                <label
+                  className={`flex items-center gap-3 p-3 rounded-lg border border-border transition-colors ${
+                    disabled ? "cursor-default" : "cursor-pointer hover:bg-surface-elevated"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={bestSeller}
@@ -949,64 +1166,59 @@ export default function ProductFormPage() {
                 Product Media
               </h2>
 
-              <div className="space-y-4">
-                <div>
-                  <label className={labelClass}>Main Image</label>
-
-                  {singleImagePreview && (
-                    <div className="relative mb-3 h-48 overflow-hidden rounded-lg border border-border group">
+              <div className="space-y-5">
+                {disabled ? (
+                  <div>
+                    <label className={labelClass}>Main Image</label>
+                    <div className="h-48 overflow-hidden rounded-xl border border-border bg-surface">
                       <img
-                        src={singleImagePreview}
-                        alt="Product Primary layout representation"
-                        className="h-full w-full object-cover"
+                        src={singleImagePreview || DEFAULT_PRODUCT_IMAGE}
+                        alt={name || "Product primary image"}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                        }}
+                        className="h-full w-full object-contain p-2"
                       />
-                      {!disabled && (
-                        <button
-                          type="button"
-                          onClick={handleRemovePrimaryImage}
-                          className="absolute top-2 right-2 p-1.5 rounded-full bg-surface border border-border text-muted hover:text-red-400 hover:border-red-500/30 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
                     </div>
-                  )}
-
-                  {!disabled && (
-                    <div className="relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePrimaryImageChange}
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      />
-                      <div className={`${inputClass} flex items-center text-muted`}>
-                        {singleImageFile ? singleImageFile.name : "Choose main image..."}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <SimpleImageUpload
+                    label="Main Image"
+                    previewUrl={singleImagePreview || null}
+                    onChange={handlePrimaryFileSelect}
+                    onRemove={singleImagePreview ? handleRemovePrimaryImage : undefined}
+                    accept={ALLOWED_PRODUCT_IMAGE_ACCEPT}
+                    error={primaryImageError}
+                    hint="Click or drag & drop main image (PNG, JPG, WEBP, max 10MB)"
+                    className="h-44"
+                  />
+                )}
 
                 <div>
                   <label className={labelClass}>Gallery Images</label>
 
-                  {imagePreviews.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2 mb-3">
-                      {imagePreviews.map((img, index) => (
+                  {galleryItems.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2.5 mb-3">
+                      {galleryItems.map((item, index) => (
                         <div
-                          key={index}
-                          className="relative aspect-square rounded-lg overflow-hidden border border-border group"
+                          key={item.id}
+                          className="relative aspect-square rounded-xl overflow-hidden border border-border bg-surface"
                         >
                           <img
-                            src={img}
-                            alt=""
+                            src={item.previewUrl}
+                            alt={`Gallery image ${index + 1}`}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                            }}
                             className="h-full w-full object-cover"
                           />
                           {!disabled && (
                             <button
                               type="button"
-                              onClick={() => handleRemoveGalleryImage(index)}
-                              className="absolute top-1 right-1 p-1 rounded-full bg-surface border border-border text-muted hover:text-red-400 hover:border-red-500/30 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              onClick={() => handleRemoveGalleryImage(item.id)}
+                              aria-label="Remove gallery image"
+                              className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-red-600"
                             >
                               <X size={12} />
                             </button>
@@ -1016,21 +1228,47 @@ export default function ProductFormPage() {
                     </div>
                   )}
 
-                  {!disabled && (
-                    <div className="relative">
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={handleGalleryImagesChange}
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      />
-                      <div className={`${inputClass} flex items-center text-muted`}>
-                        {imagesFiles.length > 0
-                          ? `${imagesFiles.length} new gallery image(s) selected`
-                          : "Choose gallery images..."}
-                      </div>
-                    </div>
+                  {disabled ? (
+                    galleryItems.length === 0 ? (
+                      <p className="text-xs italic text-muted">No gallery images uploaded.</p>
+                    ) : null
+                  ) : (
+                    <>
+                      <label
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setGalleryDragging(true);
+                        }}
+                        onDragLeave={(e) => {
+                          e.preventDefault();
+                          setGalleryDragging(false);
+                        }}
+                        onDrop={handleGalleryDrop}
+                        className={`flex h-28 w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed bg-surface-elevated px-4 text-center transition ${
+                          galleryDragging
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary"
+                        }`}
+                      >
+                        <ImagePlus size={18} className="text-muted" />
+                        <span className="text-[11px] font-medium text-muted">
+                          Click or drag & drop gallery images (Max 10MB each)
+                        </span>
+                        <input
+                          type="file"
+                          multiple
+                          accept={ALLOWED_PRODUCT_IMAGE_ACCEPT}
+                          onChange={handleGalleryImagesChange}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {galleryImageError && (
+                        <p className="mt-1.5 text-[11px] font-medium text-red-600 theme-dark:text-red-400">
+                          {galleryImageError}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

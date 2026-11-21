@@ -5,6 +5,7 @@ import {
   DUPLICATE_ERRORS,
   findDuplicateSidebarItem,
 } from "@/lib/duplicateNames";
+import { emitRealtimeUpdate } from "@/lib/realtime";
 
 type SidebarSection =
   | "navbar"
@@ -116,6 +117,8 @@ export async function POST(req: Request) {
       },
     });
 
+    emitRealtimeUpdate(["sidebar"], "sidebar-created");
+
     return NextResponse.json(item);
   } catch (error) {
     return NextResponse.json(
@@ -170,6 +173,8 @@ export async function PUT(req: Request) {
       },
     });
 
+    emitRealtimeUpdate(["sidebar"], "sidebar-updated");
+
     return NextResponse.json(item);
   } catch (error) {
     return NextResponse.json(
@@ -191,6 +196,8 @@ export async function DELETE(req: Request) {
   }
 
   await prisma.sidebarItem.delete({ where: { id } });
+
+  emitRealtimeUpdate(["sidebar"], "sidebar-deleted");
 
   return NextResponse.json({ message: "Deleted" });
 }

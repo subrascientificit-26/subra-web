@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Inter } from "next/font/google";
+import { toast } from "sonner";
 import {
   FaUser,
   FaLock,
@@ -12,12 +13,11 @@ import {
   FaFlask,
   FaHeadset,
   FaShieldAlt,
-  FaAward,
-  FaUserShield,
 } from "react-icons/fa";
 import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
 import AuthPageBranding from "@/components/AuthPageBranding";
+import CaptchaField from "@/components/CaptchaField";
 import { ROUTES } from "@/lib/routes";
 import ThemeToggle from "@/components/ThemeToggle";
 import {
@@ -48,16 +48,16 @@ const inter = Inter({
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [verified, setVerified] = useState<string | null>(null);
-
-
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const { toasts, removeToast, showError, showSuccess } = useToast();
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [captchaError, setCaptchaError] = useState("");
+  const [captchaRefreshKey, setCaptchaRefreshKey] = useState(0);
+  const { toasts, removeToast, showError } = useToast();
+  const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
@@ -78,14 +78,7 @@ export default function RegisterPage() {
     passwordRules.number &&
     passwordRules.special;
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setVerified(params.get("verified"));
-  }, []);
-
   const validate = () => {
-    setSuccess("");
-
     if (!email || !password || !confirmPassword) {
       showError("All fields are required");
       return false;
@@ -109,14 +102,24 @@ export default function RegisterPage() {
       return false;
     }
 
+    if (!captchaAnswer.trim()) {
+      const msg = "Please enter the CAPTCHA code.";
+      setCaptchaError(msg);
+      showError(msg);
+      return false;
+    }
+
     return true;
   };
 
   const handleRegister = async () => {
+    setFormError("");
+    setCaptchaError("");
     if (!validate()) return;
 
     try {
       setLoading(true);
+      const normalizedEmail = email.trim().toLowerCase();
 
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -124,29 +127,45 @@ export default function RegisterPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email,
+          email: normalizedEmail,
           password,
+          captchaToken,
+          captchaAnswer: captchaAnswer.trim(),
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        showError(data.error || "Registration failed");
+        const message = data.error || "Registration failed";
+        if (data.code === "CAPTCHA_INVALID") {
+          setCaptchaError(message);
+        }
+        setCaptchaAnswer("");
+        setCaptchaRefreshKey((prev) => prev + 1);
+        setFormError(message);
+        showError(message);
         return;
       }
 
-      setSuccess("Registration successful! Please check your email to verify your account.");
-      showSuccess("Registration successful! Please check your email to verify your account.");
-
-      setTimeout(() => {
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
-        router.push(ROUTES.login);
-      }, 2000);
-    } catch (err) {
-      showError("Server error. Please try again");
+      toast.success(
+        data.message ||
+          "Registration successful! Please check your inbox and spam folder to verify your email."
+      );
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setCaptchaAnswer("");
+      setCaptchaRefreshKey((prev) => prev + 1);
+      router.push(
+        `${ROUTES.login}?registered=true&email=${encodeURIComponent(normalizedEmail)}`
+      );
+    } catch {
+      const message = "Server error. Please try again";
+      setCaptchaAnswer("");
+      setCaptchaRefreshKey((prev) => prev + 1);
+      setFormError(message);
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -169,7 +188,7 @@ export default function RegisterPage() {
         <div className="flex flex-1 flex-col lg:flex-row">
 
           {/* LEFT SIDE (UNCHANGED) */}
-          <div className="flex w-full items-center justify-start px-4 py-6 sm:px-6 md:px-10 lg:w-1/2 lg:px-0 lg:pl-16 lg:pr-[15%]">
+          <div className="flex w-full items-center justify-start px-4 pt-14 pb-6 sm:px-6 sm:pt-16 md:px-10 lg:w-1/2 lg:px-0 lg:pt-6 lg:pl-16 lg:pr-[15%]">
             <div className={AUTH_LEFT_PANEL_CLASS}>
 
               <AuthPageBranding />
@@ -232,6 +251,12 @@ export default function RegisterPage() {
 
               <div className={AUTH_CARD_ACCENT_LINE_CLASS} />
 
+              {formError && (
+                <div className="mt-4 rounded-lg border border-red-600/40 bg-red-500/15 px-4 py-3 text-sm text-red-800 theme-dark:border-red-500/50 theme-dark:bg-red-500/20 theme-dark:text-red-300">
+                  {formError}
+                </div>
+              )}
+
               <ToastContainer toasts={toasts} onClose={removeToast} />
 
               <div className="mt-5 space-y-3">
@@ -289,7 +314,7 @@ export default function RegisterPage() {
                         passwordRules.lowercase,
                         passwordRules.number,
                         passwordRules.special,
-                      ][i] ? "text-green-400" : ""}
+                      ][i] ? "text-green-700 font-medium theme-dark:text-green-400" : ""}
                       `}>
                       • {text}
                     </span>
@@ -319,6 +344,20 @@ export default function RegisterPage() {
                     />
                   )}
                 </div>
+
+                {/* CAPTCHA */}
+                <CaptchaField
+                  value={captchaAnswer}
+                  onChange={(val) => {
+                    setCaptchaAnswer(val);
+                    if (captchaError) setCaptchaError("");
+                  }}
+                  onTokenChange={setCaptchaToken}
+                  refreshTrigger={captchaRefreshKey}
+                  error={captchaError}
+                  compact
+                  disabled={loading}
+                />
 
               </div>
 

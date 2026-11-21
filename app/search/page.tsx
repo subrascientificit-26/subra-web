@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { Menu, X } from 'lucide-react';
 
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -17,6 +18,8 @@ import {
 } from '@/components/ui';
 import type { CategoryGroup } from '@/components/ui/CategorySidebar';
 import { ROUTES } from '@/lib/routes';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
+import { useLiveUpdates } from '@/lib/hooks/useLiveUpdates';
 import {
   filterProducts,
   formatProducts,
@@ -49,27 +52,49 @@ function SearchPageContent() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('relevance');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<{ key: string; page: number }>({
+    key: '',
+    page: 1,
+  });
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/products')
+  const loadProducts = (showLoader = false) => {
+    fetch('/api/products', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => setProducts(formatProducts(data)))
-      .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        if (showLoader) setProducts([]);
+      })
+      .finally(() => {
+        if (showLoader) setLoading(false);
+      });
+  };
 
-  useEffect(() => {
-    fetch('/api/subcategory')
+  const loadSubCategories = () => {
+    fetch('/api/subcategory', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data)) return;
         setSubCategoryRecords(data);
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadProducts(true);
   }, []);
+
+  useEffect(() => {
+    loadSubCategories();
+  }, []);
+
+  useLiveUpdates(['products'], () => {
+    loadProducts(false);
+  });
+
+  useLiveUpdates(['subcategories'], loadSubCategories);
 
   const categoryGroups = useMemo<CategoryGroup[]>(() => {
     const groups = new Map<string, Set<string>>();
@@ -115,12 +140,13 @@ function SearchPageContent() {
   );
 
   const totalPages = Math.max(1, Math.ceil(sortedProducts.length / ITEMS_PER_PAGE));
+  const filterKey = `${query}|${selectedCategory}|${selectedSubCategory ?? ''}|${sortBy}`;
+  const currentPage =
+    pagination.key === filterKey ? Math.min(pagination.page, totalPages) : 1;
+  const setCurrentPage = (page: number) =>
+    setPagination({ key: filterKey, page });
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedProducts = sortedProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [query, selectedCategory, selectedSubCategory, sortBy]);
 
   if (loading) {
     return <LoadingState message="Searching products..." fullScreen />;
@@ -133,7 +159,7 @@ function SearchPageContent() {
       <Navbar />
 
       <div className="flex-grow">
-        <div className="mx-auto max-w-[1650px] px-3 py-4 sm:px-5 lg:px-6">
+        <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
           <PageHero
             title={query.trim() ? `Search: "${query.trim()}"` : 'Search Products'}
             description={`Showing results for ${displayQuery}. Refine with category filters or sort options.`}
@@ -143,8 +169,21 @@ function SearchPageContent() {
             ]}
           />
 
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[280px_1fr]">
-            <div className="lg:sticky lg:top-[var(--site-header-height)] lg:self-start">
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
+            <div className="lg:hidden">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-hover"
+              >
+                {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+                {sidebarOpen ? 'Close Filters' : 'Open Filters'}
+              </button>
+            </div>
+
+            <div
+              className={`${sidebarOpen ? 'block' : 'hidden'} lg:block lg:sticky lg:top-[var(--site-header-height)] lg:max-h-[calc(100vh-var(--site-header-height))] lg:overflow-y-auto lg:self-start`}
+            >
               <CategorySidebar
                 categoryGroups={categoryGroups}
                 selectedCategory={selectedCategory}
@@ -152,6 +191,7 @@ function SearchPageContent() {
                 onSelectCategory={(category, subCategory) => {
                   setSelectedCategory(category);
                   setSelectedSubCategory(subCategory);
+                  setSidebarOpen(false);
                 }}
               />
             </div>

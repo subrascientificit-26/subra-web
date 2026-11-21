@@ -7,12 +7,12 @@ import { NAV_LINKS, ROUTES } from "../lib/routes";
 const prisma = new PrismaClient();
 
 const INITIAL_SITE_SETTINGS: Record<string, string> = {
-  [SETTING_KEYS.siteName]: "SUBRA",
+  [SETTING_KEYS.siteName]: "Subra",
   [SETTING_KEYS.siteTagline]: "CATALOGUE",
   [SETTING_KEYS.siteLogo]: "",
   [SETTING_KEYS.favicon]: "",
-  [SETTING_KEYS.contactEmail]: "info@subrascientific.in",
-  [SETTING_KEYS.contactPhone]: "+91 94426 18261",
+  [SETTING_KEYS.contactEmail]: "info@Patientscientific.com",
+  [SETTING_KEYS.contactPhone]: "+91 98765 43210",
   [SETTING_KEYS.companyAddress]:
     "Subra Scientific Company, Balathandayutham Street, Anna Nagar Ext., Puducherry - 605005",
   [SETTING_KEYS.themeMode]: "dark",
@@ -142,6 +142,11 @@ async function seedAdminSidebarItems() {
           label: "Add Product",
           href: ROUTES.admin.productCreate,
           sortOrder: 1,
+        },
+        {
+          label: "External Products",
+          href: ROUTES.admin.externalProducts,
+          sortOrder: 2,
         },
       ],
     },

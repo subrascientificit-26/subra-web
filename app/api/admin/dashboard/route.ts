@@ -52,6 +52,7 @@ export async function GET(req: Request) {
           fullName: true,
           subject: true,
           email: true,
+          fileUrl: true,
           createdAt: true,
         },
       }),
@@ -107,6 +108,7 @@ export async function GET(req: Request) {
         title: enquiry.subject || "Enquiry",
         name: enquiry.fullName,
         email: enquiry.email,
+        fileUrl: enquiry.fileUrl,
         date: new Date(enquiry.createdAt).toLocaleDateString("en-IN"),
       })),
       monthLabels: {

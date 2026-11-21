@@ -210,7 +210,7 @@ export default function ProfileImageCrop({
               type="button"
               onClick={onRemove}
               disabled={disabled}
-              className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-600 theme-dark:text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
             >
               <Trash2 size={15} />
               Remove
@@ -223,7 +223,7 @@ export default function ProfileImageCrop({
         Upload a square photo. You can drag and zoom to crop before saving.
       </p>
 
-      {error ? <p className="mt-1.5 text-[11px] font-medium text-red-400">{error}</p> : null}
+      {error ? <p className="mt-1.5 text-[11px] font-medium text-red-600 theme-dark:text-red-400">{error}</p> : null}
 
       <input
         ref={inputRef}

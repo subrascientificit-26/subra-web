@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { ROUTES, buildEnquiryUrl } from '@/lib/routes';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 import {
   Star,
   Heart,
@@ -153,6 +154,7 @@ export default function ProductDetailClient({
   const enquiryUrl = buildEnquiryUrl({
     productId: product.id,
     productName: product.name,
+    image: galleryImages[0],
     casNo: product.casNo,
     molecularFormula: product.molecularFormula,
     molecularWeight: product.molecularWeight,
@@ -206,7 +208,7 @@ export default function ProductDetailClient({
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="max-w-[1600px] mx-auto px-4 lg:px-7 py-4">
+      <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
 
         {/* Breadcrumb */}
         <nav className="mb-5 flex flex-wrap items-center gap-2 text-xs text-primary">
@@ -270,18 +272,18 @@ export default function ProductDetailClient({
                   className={
                     isFavorite
                       ? 'fill-red-500 text-red-500'
-                      : 'text-muted hover:text-red-400'
+                      : 'text-muted hover:text-red-500'
                   }
                 />
               </button>
 
               {/* BIG IMAGE */}
-              <div className="h-[420px] md:h-[340px] sm:h-[260px] p-6 flex items-center justify-center">
+              <div className="h-[250px] sm:h-[320px] lg:h-[400px] p-4 sm:p-6 flex items-center justify-center">
 
                 <img
                   src={galleryImages[selectedImage] || DEFAULT_IMAGE}
                   alt={product.name}
-                  className="w-full h-full object-contain scale-110 transition duration-300"
+                  className="w-full h-full object-contain transition duration-300"
                   onError={() => handleImageError(selectedImage)}
                 />
               </div>
@@ -414,7 +416,7 @@ export default function ProductDetailClient({
                   Specifications
                 </h2>
 
-                <div className="overflow-hidden rounded-xl border border-border">
+                <div className="overflow-x-auto rounded-xl border border-border">
                   <table className="w-full border-collapse text-sm">
                     <tbody>
                       {product.specifications.map((spec, index) => (
@@ -422,10 +424,10 @@ export default function ProductDetailClient({
                           key={index}
                           className="border-b border-border transition last:border-b-0 hover:bg-surface-elevated"
                         >
-                          <td className="w-1/2 border-r border-border px-4 py-1.5 text-muted">
+                          <td className="w-1/2 border-r border-border px-3 sm:px-4 py-1.5 text-muted break-words">
                             {spec.parameter}
                           </td>
-                          <td className="w-1/2 px-4 py-1.5 text-foreground">
+                          <td className="w-1/2 px-3 sm:px-4 py-1.5 text-foreground break-words">
                             {spec.specification}
                           </td>
                         </tr>
@@ -533,13 +535,13 @@ export default function ProductDetailClient({
                   Price
                 </p>
 
-                <div className="flex items-end gap-2">
+                <div className="flex flex-wrap items-baseline gap-2">
 
                   <h2 className="text-2xl font-bold text-primary md:text-3xl">
                     {formatPrice(selectedPrice)}
                   </h2>
 
-                  <span className="mb-3 text-xs text-muted">
+                  <span className="text-xs text-muted">
                     (Incl. of all taxes)
                   </span>
                 </div>
@@ -628,7 +630,7 @@ export default function ProductDetailClient({
                     </p>
 
                     <p className="text-xs text-muted">
-                      We're here to help you
+                      We&apos;re here to help you
                     </p>
                   </div>
                 </div>

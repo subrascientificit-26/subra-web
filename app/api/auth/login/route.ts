@@ -7,7 +7,9 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const body = await req.json();
+    const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body?.password === "string" ? body.password : "";
 
     if (!email) {
       return NextResponse.json(
@@ -58,14 +60,15 @@ export async function POST(req: Request) {
     }
 
     // EMAIL VERIFICATION CHECK
-if (!user.emailVerified) {
-  return NextResponse.json(
-    {
-      error: "Please verify your email first",
-    },
-    { status: 401 }
-  );
-}
+    if (!user.emailVerified) {
+      return NextResponse.json(
+        {
+          error: "Please verify your email first",
+          code: "EMAIL_NOT_VERIFIED",
+        },
+        { status: 401 }
+      );
+    }
 
     const token = jwt.sign(
       {

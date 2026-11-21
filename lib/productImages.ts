@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isValidImportAssetUrl } from "@/lib/productImportValidation";
+import { validateProductImageFile } from "@/lib/productImageUtils";
 import { access, mkdir, writeFile } from "fs/promises";
 import path from "path";
 
@@ -79,6 +80,27 @@ async function saveImageBuffer(buffer: Buffer, extension: string) {
   return `/uploads/${fileName}`;
 }
 
+export function sanitizeUploadedImageName(originalName: string) {
+  const baseName = path.basename(originalName || "image");
+  const sanitized = baseName
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return sanitized || "image.png";
+}
+
+export function validateUploadedImageFiles(
+  files: FormDataEntryValue[],
+  label = "Image"
+): string | null {
+  for (const entry of files) {
+    if (!(entry instanceof File) || entry.size === 0) continue;
+    const error = validateProductImageFile(entry, label);
+    if (error) return error;
+  }
+  return null;
+}
+
 export async function saveUploadedImages(files: FormDataEntryValue[]) {
   const uploadDir = path.join(process.cwd(), "public/uploads");
   await mkdir(uploadDir, { recursive: true });
@@ -90,7 +112,8 @@ export async function saveUploadedImages(files: FormDataEntryValue[]) {
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name.replace(/\s/g, "-")}`;
+    const safeName = sanitizeUploadedImageName(file.name);
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
     const filePath = path.join(uploadDir, fileName);
 
     await writeFile(filePath, buffer);
@@ -235,9 +258,8 @@ export async function savePrimaryProductImage(
   const [imageUrl] = await saveUploadedImages([primaryFile]);
   if (!imageUrl) return null;
 
-  await prisma.productImage.updateMany({
+  await prisma.productImage.deleteMany({
     where: { productId, isPrimary: true },
-    data: { isPrimary: false },
   });
 
   await prisma.productImage.create({

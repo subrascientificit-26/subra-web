@@ -5,10 +5,27 @@ import {
   EMPTY_PUBLIC_SETTINGS,
   type PublicSiteSettings,
 } from "@/lib/settings";
+import { subscribeLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 
 let cachedSettings: PublicSiteSettings | null = null;
 let fetchPromise: Promise<PublicSiteSettings> | null = null;
 const listeners = new Set<() => void>();
+let unsubscribeLiveSettings: (() => void) | null = null;
+
+function ensureLiveSubscription() {
+  if (!unsubscribeLiveSettings && listeners.size > 0) {
+    unsubscribeLiveSettings = subscribeLiveUpdates(["settings"], () => {
+      invalidateSiteSettingsCache();
+    });
+  }
+}
+
+function cleanupLiveSubscription() {
+  if (listeners.size === 0 && unsubscribeLiveSettings) {
+    unsubscribeLiveSettings();
+    unsubscribeLiveSettings = null;
+  }
+}
 
 export function invalidateSiteSettingsCache() {
   cachedSettings = null;
@@ -51,21 +68,16 @@ export function useSiteSettings() {
   useEffect(() => {
     const listener = () => setTick((value) => value + 1);
     listeners.add(listener);
+    ensureLiveSubscription();
     return () => {
       listeners.delete(listener);
+      cleanupLiveSubscription();
     };
   }, []);
 
   useEffect(() => {
     let active = true;
 
-    if (cachedSettings) {
-      setSettings(cachedSettings);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
     fetchPublicSettings().then((data) => {
       if (!active) return;
       setSettings(data);

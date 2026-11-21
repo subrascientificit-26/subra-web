@@ -6,6 +6,7 @@ import { Home, Menu } from 'lucide-react';
 import { ROUTES } from '@/lib/routes';
 import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 import ThemeToggle from '@/components/ThemeToggle';
+import { useLiveUpdates } from '@/lib/hooks/useLiveUpdates';
 
 interface HeaderProps {
   setSidebarOpen: (value: boolean) => void;
@@ -25,14 +26,37 @@ export default function Header({
     name: '',
     profile: '',
   });
+  const [failedProfile, setFailedProfile] = useState<string | null>(null);
+
+  const fetchUser = async () => {
+    try {
+      const res = await fetch('/api/user/profile', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+
+      const data = await res.json();
+
+      setUser({
+        name: data.name,
+        profile: data.profile,
+      });
+    } catch (error) {
+      console.error('Failed to fetch user:', error);
+    }
+  };
 
   useEffect(() => {
-    const fetchUser = async () => {
+    let active = true;
+
+    const loadInitialUser = async () => {
       try {
-        const res = await fetch('/api/user/profile', { credentials: 'include' });
-
+        const res = await fetch('/api/user/profile', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
         const data = await res.json();
-
+        if (!active) return;
         setUser({
           name: data.name,
           profile: data.profile,
@@ -42,15 +66,22 @@ export default function Header({
       }
     };
 
-    fetchUser();
+    void loadInitialUser();
 
     const handleProfileUpdated = () => {
-      fetchUser();
+      void loadInitialUser();
     };
 
     window.addEventListener("profile-updated", handleProfileUpdated);
-    return () => window.removeEventListener("profile-updated", handleProfileUpdated);
+    return () => {
+      active = false;
+      window.removeEventListener("profile-updated", handleProfileUpdated);
+    };
   }, []);
+
+  useLiveUpdates(['users'], () => {
+    void fetchUser();
+  });
 
   return (
     <header
@@ -62,27 +93,29 @@ export default function Header({
         text-foreground
       "
     >
-      <div className={`${PAGE_CONTAINER_CLASS} h-full flex items-center justify-between`}>
-      <div className="flex items-center gap-5">
+      <div className={`${PAGE_CONTAINER_CLASS} h-full flex items-center justify-between gap-2 sm:gap-4`}>
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
         <button
+          type="button"
           onClick={() => setSidebarOpen(true)}
-          className="lg:hidden text-[22px] cursor-pointer"
+          aria-label="Open menu"
+          className="lg:hidden shrink-0 text-[22px] cursor-pointer"
         >
           <Menu />
         </button>
 
-        <div>
-          <h1 className="text-[24px] font-bold">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-[24px] font-bold truncate">
             Dashboard
           </h1>
 
-          <p className="text-muted text-[12px]">
+          <p className="text-muted text-[11px] sm:text-[12px] truncate">
             Welcome back, {user.name || 'Admin User'}!
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-5">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         <div className="hidden md:block text-right">
           <p className="text-[12px]">
             {new Date().toLocaleDateString('en-US', {
@@ -101,10 +134,10 @@ export default function Header({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           <Link
             href={ROUTES.home}
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface-elevated text-muted transition hover:bg-primary hover:text-white"
+            className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg border border-border bg-surface-elevated text-muted transition hover:bg-primary hover:text-white"
             title="Go to home page"
             aria-label="Home"
           >
@@ -115,13 +148,14 @@ export default function Header({
 
           <Link
             href={`${ROUTES.admin.settings}?tab=profile`}
-            className="flex items-center gap-3 rounded-lg px-2 py-1 transition hover:bg-surface-elevated"
+            className="flex items-center gap-2 sm:gap-3 rounded-lg px-1 sm:px-2 py-1 transition hover:bg-surface-elevated"
             title="Profile settings"
           >
-            {user.profile ? (
+            {user.profile && failedProfile !== user.profile ? (
               <img
                 src={user.profile}
                 alt="Profile"
+                onError={() => setFailedProfile(user.profile)}
                 className="
                 w-[34px] h-[34px]
                 rounded-full
@@ -132,7 +166,7 @@ export default function Header({
               <div
                 className="
                 w-[34px] h-[34px]
-                rounded-full bg-[#2563eb]
+                rounded-full bg-primary
                 flex items-center justify-center
                 text-white font-semibold
               "

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSiteSettings } from '@/lib/hooks/useSiteSettings';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 import WidgetCardIcon from '@/components/WidgetCardIcon';
 
 function getServiceGridClass(count: number) {
@@ -21,17 +22,17 @@ export default function Services() {
 
   return (
     <section className="bg-background text-foreground border-t border-b border-border py-4">
-      <div className="max-w-[98%] mx-auto px-2 sm:px-3 lg:px-4">
+      <div className={PAGE_CONTAINER_CLASS}>
         <div
-          className={`grid divide-y sm:divide-y-0 lg:divide-x divide-border ${getServiceGridClass(serviceCards.length)}`}
+          className={`grid gap-px bg-border overflow-hidden rounded-xl border border-border ${getServiceGridClass(serviceCards.length)}`}
         >
           {serviceCards.map((service) => (
             <div
               key={service.id}
-              className="flex items-start gap-5 px-4 py-4"
+              className="flex items-start gap-4 bg-background px-4 py-4"
             >
               <div className="flex-shrink-0">
-                <div className="w-15 h-15 flex items-center justify-center rounded-full border border-primary/60">
+                <div className="h-12 w-12 sm:h-14 sm:w-14 flex items-center justify-center rounded-full border border-primary/60">
                   <WidgetCardIcon
                     icon={service.icon}
                     size={25}

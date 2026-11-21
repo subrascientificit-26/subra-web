@@ -4,17 +4,20 @@ import StatsCards from '@/components/dashboard/StatsCards';
 import ChartsSection from '@/components/dashboard/ChartsSection';
 import TablesSection from '@/components/dashboard/TablesSection';
 import ActionCards from '@/components/dashboard/ActionCards';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 
 export default function AdminDashboardPage() {
   return (
-    <section className="p-4 lg:p-6 space-y-4">
-      <StatsCards />
+    <div className="bg-background text-foreground py-3">
+      <section className={`${PAGE_CONTAINER_CLASS} space-y-4`}>
+        <StatsCards />
 
-      <ChartsSection />
+        <ChartsSection />
 
-      <TablesSection />
+        <TablesSection />
 
-      <ActionCards />
-    </section>
+        <ActionCards />
+      </section>
+    </div>
   );
 }

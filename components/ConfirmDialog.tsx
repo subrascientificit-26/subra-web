@@ -30,10 +30,10 @@ export default function ConfirmDialog({
   const confirmClass =
     confirmTone === "danger"
       ? "bg-red-600 hover:bg-red-700"
-      : "bg-blue-600 hover:bg-blue-700";
+      : "bg-primary hover:bg-primary-hover";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <p className="mt-2 text-sm text-muted">{description}</p>
@@ -44,7 +44,7 @@ export default function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-elevated"
+            className="rounded-lg border border-border bg-surface-elevated/60 px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-elevated"
           >
             {cancelLabel}
           </button>

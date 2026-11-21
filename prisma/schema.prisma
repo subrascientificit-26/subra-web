@@ -35,8 +35,9 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
-  createdAt DateTime        @default(now())
-  reviews   ProductReview[]
+  createdAt DateTime @default(now())
+
+  reviews ProductReview[]
 }
 
 model Category {
@@ -100,8 +101,8 @@ model Product {
   images         ProductImage[]
   specifications ProductSpecification[]
   documents      ProductDocument[]
-  packSizes      ProductPackSize[]
   reviews        ProductReview[]
+  packSizes      ProductPackSize[]
 }
 
 model ProductImage {
@@ -224,4 +225,20 @@ model SiteSetting {
   key       String   @unique
   value     String   @db.Text
   updatedAt DateTime @updatedAt
+}
+
+model ExternalProduct {
+  id          Int      @id @default(autoincrement())
+  productCode String   @unique
+  productName String
+  casNo       String?
+  type        String
+  brand       String
+  pack        String
+  hsn         String
+  gstPercent  Float
+  sellingRate Float?
+  units       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

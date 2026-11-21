@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   X,
   Home,
@@ -38,20 +38,29 @@ function getIcon(label: string, href: string) {
 }
 
 export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
+  const router = useRouter();
   const pathname = usePathname();
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [manualOpenMenu, setManualOpenMenu] = useState<{
+    path: string | null;
+    label: string | null;
+  } | null>(null);
   const { items: menuItems, loading } = useSidebarItems("admin");
 
   useEffect(() => {
-    const activeParent = menuItems.find(
+    setSidebarOpen(false);
+  }, [pathname, setSidebarOpen]);
+
+  const activeParentLabel =
+    menuItems.find(
       (item) =>
         item.children?.some((child) => isAdminNavActive(pathname, child.href)) ||
         (item.href && isAdminNavActive(pathname, item.href))
-    );
-    if (activeParent?.label) {
-      setOpenMenu(activeParent.label);
-    }
-  }, [pathname, menuItems]);
+    )?.label ?? null;
+
+  const openMenu =
+    manualOpenMenu && manualOpenMenu.path === pathname
+      ? manualOpenMenu.label
+      : activeParentLabel;
 
   const handleLogout = async () => {
     try {
@@ -61,25 +70,35 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
-      window.location.href = ROUTES.login;
+      router.replace(ROUTES.login);
+      router.refresh();
     }
   };
 
   return (
-    <aside
-      className={`fixed top-0 left-0 z-50 h-screen w-[250px] bg-surface border-r border-border text-foreground transition-all duration-300 flex flex-col overflow-hidden ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"} `}
-    >
-      <button
-        type="button"
-        onClick={() => setSidebarOpen(false)}
-        className="lg:hidden absolute top-4 right-4 w-[34px] h-[34px] rounded-lg bg-surface-elevated border border-border flex items-center justify-center"
+    <>
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed top-0 left-0 z-50 h-screen w-[250px] bg-surface border-r border-border text-foreground transition-all duration-300 flex flex-col overflow-hidden ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"} `}
       >
-        <X size={16} />
-      </button>
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close sidebar"
+          className="lg:hidden absolute top-4 right-4 z-30 w-[34px] h-[34px] rounded-lg bg-surface-elevated border border-border flex items-center justify-center"
+        >
+          <X size={16} />
+        </button>
 
       <div className="sticky top-0 z-20 bg-surface border-b border-border px-4 py-5 shrink-0">
         <SiteBranding
-          href={ROUTES.admin.dashboard}
+          href={ROUTES.home}
           titleClassName="text-[28px] font-black leading-[30px]"
           taglineClassName="text-[14px] tracking-[5px] font-semibold"
           logoClassName="h-10 w-10 object-contain"
@@ -113,7 +132,12 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                   <>
                     <button
                       type="button"
-                      onClick={() => setOpenMenu(openMenu === item.label ? null : item.label)}
+                      onClick={() =>
+                        setManualOpenMenu({
+                          path: pathname,
+                          label: openMenu === item.label ? null : item.label,
+                        })
+                      }
                       className={`w-full flex items-center justify-between px-3 py-3 rounded-xl transition-all duration-300 ${submenuActive ? "bg-surface-elevated" : "hover:bg-surface-elevated"}`}
                     >
                       <div className="flex items-center gap-4">
@@ -130,13 +154,14 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                     </button>
 
                     {isOpen && (
-                      <ul className="mt-1 ml-7 space-y-1">
+                      <ul className="mt-1 ml-7 space-y-1 border-l border-border pl-2">
                         {item.children?.map((subItem) => {
                           const active = isAdminNavActive(pathname, subItem.href);
                           return (
                             <li key={subItem.id}>
                               <Link
                                 href={subItem.href}
+                                onClick={() => setSidebarOpen(false)}
                                 className={`block w-full px-3 py-2 rounded-lg text-[13px] transition-all ${
                                   active
                                     ? "bg-primary text-white"
@@ -154,6 +179,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                 ) : (
                   <Link
                     href={item.href}
+                    onClick={() => setSidebarOpen(false)}
                     className={`w-full flex items-center justify-between px-3 py-3 rounded-xl transition-all duration-300 group ${itemActive ? "bg-primary text-white" : "hover:bg-surface-elevated"}`}
                   >
                     <div className="flex items-center gap-4">
@@ -181,5 +207,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
         </button>
       </div>
     </aside>
+    </>
   );
 }

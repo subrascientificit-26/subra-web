@@ -113,31 +113,51 @@ export function validateSmtpSettings(
 ): { valid: boolean; errors: FieldErrors } {
   const errors: FieldErrors = {};
   const enabled = settings[SETTING_KEYS.smtpEnabled] === "true";
+  const host = settings[SETTING_KEYS.smtpHost]?.trim() ?? "";
+  const port = settings[SETTING_KEYS.smtpPort]?.trim() ?? "";
+  const user = settings[SETTING_KEYS.smtpUser]?.trim() ?? "";
+  const pass = settings[SETTING_KEYS.smtpPass]?.trim() ?? "";
+  const from = settings[SETTING_KEYS.smtpFrom]?.trim() ?? "";
+  const adminEmail = settings[SETTING_KEYS.smtpAdminEmail]?.trim() ?? "";
 
   if (enabled) {
-    if (!settings[SETTING_KEYS.smtpHost]?.trim()) {
+    if (!host) {
       errors[SETTING_KEYS.smtpHost] = "SMTP host is required when email is enabled";
     }
-    if (!settings[SETTING_KEYS.smtpPort]?.trim()) {
+    if (!port) {
       errors[SETTING_KEYS.smtpPort] = "SMTP port is required when email is enabled";
-    } else if (!/^\d+$/.test(settings[SETTING_KEYS.smtpPort].trim())) {
-      errors[SETTING_KEYS.smtpPort] = "SMTP port must be a number";
+    } else {
+      const parsedPort = Number.parseInt(port, 10);
+      if (!/^\d+$/.test(port) || parsedPort < 1 || parsedPort > 65535) {
+        errors[SETTING_KEYS.smtpPort] = "SMTP port must be between 1 and 65535";
+      }
     }
-    if (!settings[SETTING_KEYS.smtpUser]?.trim()) {
+    if (!user) {
       errors[SETTING_KEYS.smtpUser] = "SMTP username is required when email is enabled";
     }
-    if (!settings[SETTING_KEYS.smtpPass]?.trim()) {
+    if (!pass) {
       errors[SETTING_KEYS.smtpPass] = "SMTP password is required when email is enabled";
     }
-    if (!settings[SETTING_KEYS.smtpFrom]?.trim()) {
+    const effectiveFrom = from || (validateEmail(user) ? user : "");
+    if (!effectiveFrom) {
       errors[SETTING_KEYS.smtpFrom] = "From email is required when email is enabled";
-    } else if (!validateEmail(settings[SETTING_KEYS.smtpFrom].trim())) {
+    } else if (!validateEmail(effectiveFrom)) {
       errors[SETTING_KEYS.smtpFrom] = "Enter a valid from email";
     }
-    if (
-      settings[SETTING_KEYS.smtpAdminEmail]?.trim() &&
-      !validateEmail(settings[SETTING_KEYS.smtpAdminEmail].trim())
-    ) {
+    if (adminEmail && !validateEmail(adminEmail)) {
+      errors[SETTING_KEYS.smtpAdminEmail] = "Enter a valid admin notification email";
+    }
+  } else {
+    if (port) {
+      const parsedPort = Number.parseInt(port, 10);
+      if (!/^\d+$/.test(port) || parsedPort < 1 || parsedPort > 65535) {
+        errors[SETTING_KEYS.smtpPort] = "SMTP port must be between 1 and 65535";
+      }
+    }
+    if (from && !validateEmail(from)) {
+      errors[SETTING_KEYS.smtpFrom] = "Enter a valid from email";
+    }
+    if (adminEmail && !validateEmail(adminEmail)) {
       errors[SETTING_KEYS.smtpAdminEmail] = "Enter a valid admin notification email";
     }
   }

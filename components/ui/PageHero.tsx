@@ -58,7 +58,7 @@ export default function PageHero({
           ) : (
             <>
               <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-surface-elevated theme-light:from-primary/10 theme-light:to-surface-elevated" />
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--surface)_0%,rgba(7,18,36,0.95)_10%,rgba(7,18,36,0.7)_20%,transparent_45%)] theme-light:hidden" />
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--surface)_0%,rgba(10,20,40,0.95)_10%,rgba(10,20,40,0.7)_20%,transparent_45%)] theme-light:hidden" />
             </>
           )}
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(2,8,23,0.4)_0%,transparent_20%,transparent_80%,rgba(2,8,23,0.4)_100%)] theme-light:opacity-30" />

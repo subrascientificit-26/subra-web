@@ -4,6 +4,7 @@ import { getAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { saveProfileImage } from "@/lib/profileImage";
 import { validateProfileForm } from "@/lib/profileValidation";
 import { prisma } from "@/lib/prisma";
+import { emitRealtimeUpdate } from "@/lib/realtime";
 
 function jsonFieldErrors(errors: Record<string, string>, status = 400) {
   return NextResponse.json({ error: "Validation failed", errors }, { status });
@@ -117,6 +118,8 @@ export async function PUT(req: Request) {
         profile: true,
       },
     });
+
+    emitRealtimeUpdate(["users"], "profile-updated");
 
     return NextResponse.json({
       name: updated.name || updated.email.split("@")[0],

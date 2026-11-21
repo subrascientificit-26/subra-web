@@ -19,11 +19,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <div className="flex">
           <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
-          <main className="flex-1 lg:ml-[250px] h-screen flex flex-col overflow-hidden">
+          <main className="flex-1 min-w-0 lg:ml-[250px] h-screen flex flex-col overflow-hidden">
             <Header setSidebarOpen={setSidebarOpen} />
 
-            <div className="flex-1 min-h-0 overflow-hidden pt-[75px] pb-[70px]">
-              <div className="h-full overflow-y-auto">{children}</div>
+            <div className="flex-1 min-h-0 overflow-hidden pt-[75px] pb-[96px] sm:pb-[84px] xl:pb-[72px]">
+              <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
             </div>
 
             <Footer />

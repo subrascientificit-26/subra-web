@@ -19,7 +19,7 @@ export function FormField({ label, error, required = false, children }: FormFiel
       </label>
       {children}
       {error && (
-        <p className="mt-1 text-sm text-red-400">{error}</p>
+        <p className="mt-1 text-sm text-red-600 theme-dark:text-red-400">{error}</p>
       )}
     </div>
   );
@@ -50,7 +50,7 @@ export function FormInput({ label, error, required = false, ...props }: FormInpu
           outline-none
           focus:border-primary
           transition-colors duration-200
-          ${error ? 'border-red-500/50' : ''}
+          ${error ? 'border-red-500' : ''}
           ${props.className || ''}
         `}
       />
@@ -82,7 +82,7 @@ export function FormTextArea({ label, error, required = false, ...props }: FormT
           outline-none
           focus:border-primary
           transition-colors duration-200
-          ${error ? 'border-red-500/50' : ''}
+          ${error ? 'border-red-500' : ''}
           ${props.className || ''}
         `}
       />
@@ -121,7 +121,7 @@ export function FormSelect({
           outline-none
           focus:border-primary
           transition-colors duration-200
-          ${error ? 'border-red-500/50' : ''}
+          ${error ? 'border-red-500' : ''}
           ${props.className || ''}
         `}
       >

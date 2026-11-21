@@ -5,6 +5,7 @@ import {
   saveGalleryProductImages,
   savePrimaryProductImage,
   saveUploadedImages,
+  validateUploadedImageFiles,
 } from "@/lib/productImages";
 import { parseProductDocumentsFromFormData } from "@/lib/productDocuments";
 import { parsePackSizeFromFormData } from "@/lib/productPackSizes";
@@ -12,7 +13,8 @@ import {
   DUPLICATE_ERRORS,
   findDuplicateProduct,
 } from "@/lib/duplicateNames";
-import { validateCasNumber } from "@/lib/productImportValidation";
+import { validateCasNumber } from "@/lib/validators";
+import { emitRealtimeUpdate } from "@/lib/realtime";
 
 function parseNumber(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
@@ -140,6 +142,26 @@ export async function PUT(
 
       const primaryImageFile = formData.get("primaryImage");
       const galleryImageFiles = formData.getAll("galleryImages");
+      const legacyImages = formData.getAll("images");
+      const removePrimaryImage =
+        formData.get("removePrimaryImage")?.toString() === "true";
+      const hasKeptGalleryIds = formData.has("keptGalleryImageIds");
+      let keptGalleryImageIds: number[] = [];
+
+      if (hasKeptGalleryIds) {
+        try {
+          const parsedIds = JSON.parse(
+            formData.get("keptGalleryImageIds")?.toString() || "[]"
+          );
+          if (Array.isArray(parsedIds)) {
+            keptGalleryImageIds = parsedIds
+              .map((value) => Number(value))
+              .filter((value) => Number.isInteger(value) && value > 0);
+          }
+        } catch {
+          keptGalleryImageIds = [];
+        }
+      }
 
       if (!validateString(body.name)) {
         return NextResponse.json({ error: "Product name is required" }, { status: 400 });
@@ -150,17 +172,27 @@ export async function PUT(
       }
 
       if (!validateString(body.casNumber)) {
-        return NextResponse.json({ error: "CAS Number required" }, { status: 400 });
+        return NextResponse.json({ error: "CAS Number is required." }, { status: 400 });
       }
 
-      const casValidationError = validateCasNumber(String(body.casNumber).trim());
-      if (casValidationError && casValidationError !== "CAS Number is required") {
+      const trimmedCasNumber = String(body.casNumber).trim();
+      const casValidationError = validateCasNumber(trimmedCasNumber, { required: true });
+      if (casValidationError) {
         return NextResponse.json({ error: casValidationError }, { status: 400 });
       }
 
       const parsedSubCategoryId = parseNumber(body.subCategoryId);
       if (parsedSubCategoryId === null) {
         return NextResponse.json({ error: "Subcategory is required" }, { status: 400 });
+      }
+
+      const imageValidationError =
+        (primaryImageFile ? validateUploadedImageFiles([primaryImageFile], "Main image") : null) ||
+        validateUploadedImageFiles(galleryImageFiles, "Gallery image") ||
+        validateUploadedImageFiles(legacyImages, "Image");
+
+      if (imageValidationError) {
+        return NextResponse.json({ error: imageValidationError }, { status: 400 });
       }
 
       const duplicateProduct = await findDuplicateProduct(String(body.name).trim(), id);
@@ -187,7 +219,7 @@ export async function PUT(
             ? String(body.shortDescription)
             : null,
           description: String(body.description).trim(),
-          casNumber: validateString(body.casNumber) ? String(body.casNumber) : null,
+          casNumber: trimmedCasNumber,
           molecularFormula: validateString(body.molecularFormula)
             ? String(body.molecularFormula)
             : null,
@@ -231,15 +263,30 @@ export async function PUT(
         });
       }
 
+      if (hasKeptGalleryIds) {
+        await prisma.productImage.deleteMany({
+          where: {
+            productId: id,
+            isPrimary: false,
+            ...(keptGalleryImageIds.length > 0
+              ? { id: { notIn: keptGalleryImageIds } }
+              : {}),
+          },
+        });
+      }
+
       if (primaryImageFile instanceof File && primaryImageFile.size > 0) {
         await savePrimaryProductImage(id, primaryImageFile);
+      } else if (removePrimaryImage) {
+        await prisma.productImage.deleteMany({
+          where: { productId: id, isPrimary: true },
+        });
       }
 
       if (galleryImageFiles.length > 0) {
         await saveGalleryProductImages(id, galleryImageFiles);
       }
 
-      const legacyImages = formData.getAll("images");
       if (legacyImages.length > 0) {
         const imagePaths = await saveUploadedImages(legacyImages);
         if (imagePaths.length > 0) {
@@ -262,6 +309,13 @@ export async function PUT(
         );
       }
 
+      if (body.casNumber !== undefined && String(body.casNumber).trim()) {
+        const casValidationError = validateCasNumber(String(body.casNumber).trim());
+        if (casValidationError) {
+          return NextResponse.json({ error: casValidationError }, { status: 400 });
+        }
+      }
+
       const parsedSubCategoryId = parseNumber(body.subCategoryId);
       if (parsedSubCategoryId === null) {
         return NextResponse.json({ error: "Subcategory is required" }, { status: 400 });
@@ -278,6 +332,11 @@ export async function PUT(
           name: String(body.name).trim(),
           slug,
           description: String(body.description).trim(),
+          ...(body.casNumber !== undefined
+            ? {
+                casNumber: String(body.casNumber).trim() || null,
+              }
+            : {}),
           subCategoryId: parsedSubCategoryId,
           price: parseNumber(body.price) ?? 0,
           stock: parseNumber(body.stock) ?? 0,
@@ -305,6 +364,8 @@ export async function PUT(
       },
     });
 
+    emitRealtimeUpdate(["products", "dashboard"], "product-updated");
+
     return NextResponse.json(updated);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update product";
@@ -325,6 +386,8 @@ export async function DELETE(
     await prisma.product.delete({
       where: { id: Number(id) },
     });
+
+    emitRealtimeUpdate(["products", "dashboard"], "product-deleted");
 
     return NextResponse.json({ message: "Deleted successfully" });
   } catch (error) {

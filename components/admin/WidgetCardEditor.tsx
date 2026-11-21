@@ -120,7 +120,7 @@ export default function WidgetCardEditor({
       </div>
 
       {errors[errorPrefix] ? (
-        <p className="text-sm font-medium text-red-400">{errors[errorPrefix]}</p>
+        <p className="text-sm font-medium text-red-600 theme-dark:text-red-400">{errors[errorPrefix]}</p>
       ) : null}
 
       <div className="space-y-3">
@@ -184,7 +184,7 @@ export default function WidgetCardEditor({
                     type="button"
                     onClick={() => removeCard(index)}
                     disabled={cards.length === 1}
-                    className="rounded-lg border border-red-500/30 p-2 text-red-400 transition hover:bg-red-500/10 disabled:opacity-40"
+                    className="rounded-lg border border-red-500/40 p-2 text-red-600 theme-dark:text-red-400 transition hover:bg-red-500/10 disabled:opacity-40"
                     aria-label="Remove card"
                   >
                     <Trash2 size={16} />

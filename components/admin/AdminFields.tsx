@@ -8,10 +8,10 @@ import type {
 import { RequiredMark } from "@/components/ui/FieldLabel";
 
 const fieldClass =
-  "w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary placeholder:text-muted";
+  "w-full rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted";
 const labelClass =
   "mb-2 block text-xs font-semibold uppercase tracking-wider text-muted";
-const errorClass = "mt-1.5 text-[11px] font-medium text-red-400";
+const errorClass = "mt-1.5 text-[11px] font-medium text-red-600 theme-dark:text-red-400";
 
 interface FieldProps {
   label: string;
@@ -49,7 +49,7 @@ export function AdminInput({
       <input
         {...props}
         required={required}
-        className={`${fieldClass} ${error ? "border-red-500/50 focus:border-red-500" : ""} ${className}`}
+        className={`${fieldClass} ${error ? "border-red-500 focus:border-red-500" : ""} ${className}`}
       />
     </AdminField>
   );
@@ -71,7 +71,7 @@ export function AdminTextarea({
       <textarea
         {...props}
         required={required}
-        className={`${fieldClass} resize-none ${error ? "border-red-500/50 focus:border-red-500" : ""} ${className}`}
+        className={`${fieldClass} resize-none ${error ? "border-red-500 focus:border-red-500" : ""} ${className}`}
       />
     </AdminField>
   );
@@ -97,7 +97,7 @@ export function AdminSelect({
       <select
         {...props}
         required={required}
-        className={`${fieldClass} ${error ? "border-red-500/50 focus:border-red-500" : ""} ${className}`}
+        className={`${fieldClass} ${error ? "border-red-500 focus:border-red-500" : ""} ${className}`}
       >
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((option) => (
@@ -126,7 +126,7 @@ export function AdminFormActions({
       <button
         type="submit"
         disabled={saving}
-        className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm disabled:opacity-40 transition-all shadow-lg shadow-blue-600/10"
+        className="w-full h-11 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm disabled:opacity-40 transition-all shadow-sm"
       >
         {saving ? "Saving..." : submitLabel}
       </button>
@@ -134,7 +134,7 @@ export function AdminFormActions({
         <button
           type="button"
           onClick={onCancel}
-          className="w-full h-11 rounded-xl border border-border bg-surface text-muted font-medium text-sm hover:bg-surface-elevated hover:text-foreground transition-all"
+          className="w-full h-11 rounded-xl border border-border bg-surface-elevated text-muted font-medium text-sm hover:border-primary/40 hover:text-foreground transition-all"
         >
           Cancel
         </button>

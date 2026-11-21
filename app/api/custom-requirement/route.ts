@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { validateCasNumber } from "@/lib/validators";
+import { emitRealtimeUpdate } from "@/lib/realtime";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 
@@ -10,9 +12,8 @@ export async function POST(req: Request) {
       .get("productName")
       ?.toString();
 
-    const casNo = formData
-      .get("casNo")
-      ?.toString();
+    const casNoRaw = formData.get("casNo")?.toString() ?? "";
+    const casNo = casNoRaw.trim() || null;
 
     const molecularFormula = formData
       .get("molecularFormula")
@@ -59,6 +60,16 @@ export async function POST(req: Request) {
         },
         { status: 400 }
       );
+    }
+
+    if (casNo) {
+      const casError = validateCasNumber(casNo);
+      if (casError) {
+        return Response.json(
+          { error: casError },
+          { status: 400 }
+        );
+      }
     }
 
     if (!purity) {
@@ -170,6 +181,8 @@ export async function POST(req: Request) {
           },
         }
       );
+
+    emitRealtimeUpdate(["custom-requirements", "dashboard"], "custom-requirement-created");
 
     return Response.json(
       {

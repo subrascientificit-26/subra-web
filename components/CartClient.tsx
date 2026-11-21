@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Minus, Plus, Trash2, ShoppingCart, ArrowLeft } from "lucide-react";
 import { ROUTES, buildEnquiryUrl } from "@/lib/routes";
 import { useCart } from "@/components/CartProvider";
+import { DEFAULT_PRODUCT_IMAGE } from "@/lib/products";
 import { resolveProductImageUrl } from "@/lib/productImageUrl";
 
 function formatPrice(price: number) {
@@ -58,31 +59,42 @@ export default function CartClient() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* ITEMS */}
       <div className="space-y-3 lg:col-span-2">
-        {items.map((item) => (
+        {items.map((item) => {
+          const itemHref =
+            item.href ||
+            (item.source === "external"
+              ? ROUTES.externalProductDetail(item.id)
+              : ROUTES.productDetail(item.id));
+          return (
           <div
-            key={`${item.id}-${item.packSize}`}
+            key={`${item.source ?? "product"}-${item.id}-${item.packSize}`}
             className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-3 sm:gap-4"
           >
             <Link
-              href={ROUTES.productDetail(item.id)}
+              href={itemHref}
               className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-border bg-surface-elevated"
             >
               <img
                 src={resolveProductImageUrl(item.image)}
                 alt={item.name}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                }}
                 className="h-full w-full object-contain p-1.5"
               />
             </Link>
 
             <div className="min-w-[9rem] flex-1">
               <Link
-                href={ROUTES.productDetail(item.id)}
+                href={itemHref}
                 className="line-clamp-1 text-sm font-semibold text-foreground hover:text-primary md:text-base"
               >
                 {item.name}
               </Link>
 
               <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
+                {item.productCode ? <span>Code: {item.productCode}</span> : null}
                 <span>Pack Size: {item.packSize}</span>
                 {item.casNo ? <span>CAS No.: {item.casNo}</span> : null}
                 {item.price > 0 ? (
@@ -91,12 +103,17 @@ export default function CartClient() {
               </div>
             </div>
 
-            <div className="ml-auto flex items-center gap-3 sm:gap-4">
+            <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-between sm:justify-end gap-2 sm:gap-4">
               <div className="flex items-center rounded-lg border border-border">
                 <button
                   type="button"
                   onClick={() =>
-                    updateQuantity(item.id, item.packSize, item.quantity - 1)
+                    updateQuantity(
+                      item.id,
+                      item.packSize,
+                      item.quantity - 1,
+                      item.source
+                    )
                   }
                   className="flex h-8 w-8 items-center justify-center text-muted transition hover:text-foreground"
                   aria-label="Decrease quantity"
@@ -111,7 +128,12 @@ export default function CartClient() {
                 <button
                   type="button"
                   onClick={() =>
-                    updateQuantity(item.id, item.packSize, item.quantity + 1)
+                    updateQuantity(
+                      item.id,
+                      item.packSize,
+                      item.quantity + 1,
+                      item.source
+                    )
                   }
                   className="flex h-8 w-8 items-center justify-center text-muted transition hover:text-foreground"
                   aria-label="Increase quantity"
@@ -128,7 +150,7 @@ export default function CartClient() {
 
               <button
                 type="button"
-                onClick={() => removeItem(item.id, item.packSize)}
+                onClick={() => removeItem(item.id, item.packSize, item.source)}
                 className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border text-muted transition hover:border-rose-500 hover:text-rose-500"
                 aria-label="Remove item"
               >
@@ -136,7 +158,8 @@ export default function CartClient() {
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
 
         <div className="flex items-center justify-between">
           <Link

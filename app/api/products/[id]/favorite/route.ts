@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { emitRealtimeUpdate } from "@/lib/realtime";
 import { NextResponse } from "next/server";
 
 function parseBoolean(value: unknown, fallback = false) {
@@ -38,6 +39,8 @@ export async function PATCH(
       data: { isFavorite },
       select: { id: true, isFavorite: true },
     });
+
+    emitRealtimeUpdate(["products"], "product-favorite");
 
     return NextResponse.json(updated);
   } catch (error) {

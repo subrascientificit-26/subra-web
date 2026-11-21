@@ -17,6 +17,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
 import { invalidateSidebarCache } from "@/lib/hooks/useSidebarItems";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 import { ADMIN_TOOLBAR_SELECT_CLASS } from "@/lib/admin/formStyles";
 
 interface SidebarItem {
@@ -57,27 +58,37 @@ export default function AdminSidebarPage() {
   const [activeFilter, setActiveFilter] = useState("all");
   const { toasts, removeToast, showError, showSuccess } = useToast();
 
-  const loadItems = async () => {
-    setLoading(true);
+  const loadItems = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
     try {
-      const res = await fetch("/api/sidebar?includeInactive=true");
+      const res = await fetch("/api/sidebar?includeInactive=true", {
+        cache: "no-store",
+      });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Failed to load sidebar items");
       }
       setItems(Array.isArray(data) ? data : []);
-      invalidateSidebarCache();
+      if (showLoader) {
+        invalidateSidebarCache();
+      }
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Failed to load sidebar items");
-      setItems([]);
+      if (showLoader) {
+        showError(error instanceof Error ? error.message : "Failed to load sidebar items");
+        setItems([]);
+      }
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadItems();
+    loadItems(true);
   }, []);
+
+  useLiveUpdates(["sidebar"], () => {
+    void loadItems(false);
+  });
 
   const parentOptions = useMemo(
     () =>
@@ -238,13 +249,11 @@ export default function AdminSidebarPage() {
     <AdminListLayout>
       <ToastContainer toasts={toasts} onClose={removeToast} />
 
-      <div className="h-[calc(100vh-145px)] min-h-0 flex flex-col">
-        <AdminCrudLayout
-          title="Sidebar Management"
-          // description="Create navigation links stored in the database and shown on the website."
-          compact
-          fitViewport
-          form={
+      <AdminCrudLayout
+        title="Sidebar Management"
+        // description="Create navigation links stored in the database and shown on the website."
+        compact
+        form={
             <AdminFormPanel
               compact
               title={form.id ? "Edit Sidebar Item" : "Create Sidebar Item"}
@@ -316,12 +325,12 @@ export default function AdminSidebarPage() {
           </AdminFormPanel>
         }
       >
-        <AdminTablePanel fitViewport>
+        <AdminTablePanel>
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <select
               value={sectionFilter}
               onChange={(event) => setSectionFilter(event.target.value)}
-              className={ADMIN_TOOLBAR_SELECT_CLASS}
+              className={`w-full sm:w-auto ${ADMIN_TOOLBAR_SELECT_CLASS}`}
               aria-label="Filter by section"
             >
               <option value="all">All Sections</option>
@@ -335,7 +344,7 @@ export default function AdminSidebarPage() {
             <select
               value={activeFilter}
               onChange={(event) => setActiveFilter(event.target.value)}
-              className={ADMIN_TOOLBAR_SELECT_CLASS}
+              className={`w-full sm:w-auto ${ADMIN_TOOLBAR_SELECT_CLASS}`}
               aria-label="Filter by active status"
             >
               <option value="all">All Status</option>
@@ -352,7 +361,6 @@ export default function AdminSidebarPage() {
           />
         </AdminTablePanel>
       </AdminCrudLayout>
-      </div>
 
       <ConfirmDialog
         open={confirmDeleteId !== null}

@@ -19,7 +19,8 @@ import {
   parseImportDocuments,
   resolveImportDocuments,
 } from '@/lib/productDocuments';
-import { extractRowImagesFromWorkbook } from '@/lib/excelWorkbookImages'; 
+import { extractRowImagesFromWorkbook } from '@/lib/excelWorkbookImages';
+import { emitRealtimeUpdate } from '@/lib/realtime';
 
 function normalizeText(value: unknown) {
   if (value === undefined || value === null) {
@@ -1045,6 +1046,13 @@ export async function POST(req: Request) {
 
     if (warningCount > 0) {
       messageParts.push(`${warningCount} asset warning(s) — check row details`);
+    }
+
+    if (imported > 0) {
+      emitRealtimeUpdate(
+        ['products', 'categories', 'subcategories', 'dashboard'],
+        'products-imported'
+      );
     }
 
     return NextResponse.json({

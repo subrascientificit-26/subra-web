@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { validateCasNumber } from '@/lib/validators';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 
 import {
   CloudUpload,
@@ -24,10 +26,11 @@ export default function CustomProductForm() {
     deliveryLocation: '',
   });
 
-  const [errors, setErrors] = useState<any>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [file, setFile] =
     useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isSubmitting, setIsSubmitting] =
     useState(false);
@@ -51,7 +54,7 @@ export default function CustomProductForm() {
       [name]: value,
     }));
 
-    setErrors((prev: any) => ({
+    setErrors((prev) => ({
       ...prev,
       [name]: '',
     }));
@@ -60,17 +63,40 @@ export default function CustomProductForm() {
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    if (e.target.files?.[0]) {
-      setFile(e.target.files[0]);
+    const selectedFile = e.target.files?.[0] || null;
+    e.target.value = '';
+    if (selectedFile) {
+      setFile(selectedFile);
     }
   };
 
+  const handleCasBlur = () => {
+    const trimmedCas = formData.casNo.trim();
+    if (!trimmedCas) {
+      setErrors((prev) => ({ ...prev, casNo: '' }));
+      return;
+    }
+
+    const casError = validateCasNumber(trimmedCas);
+    setErrors((prev) => ({
+      ...prev,
+      casNo: casError || '',
+    }));
+  };
+
   const validateForm = () => {
-    const newErrors: any = {};
+    const newErrors: Record<string, string> = {};
 
     if (!formData.productName.trim()) {
       newErrors.productName =
         'Product name is required';
+    }
+
+    if (formData.casNo.trim()) {
+      const casError = validateCasNumber(formData.casNo.trim());
+      if (casError) {
+        newErrors.casNo = casError;
+      }
     }
 
     if (!formData.purity) {
@@ -122,6 +148,9 @@ export default function CustomProductForm() {
     setErrors({});
 
     setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
 
     setMessage({
       type: '',
@@ -143,7 +172,7 @@ export default function CustomProductForm() {
       setMessage({
         type: 'error',
         text:
-          'Please fill all required fields.',
+          'Please fix the highlighted errors before submitting.',
       });
 
       return;
@@ -205,6 +234,9 @@ export default function CustomProductForm() {
       });
 
       setFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
 
       setErrors({});
     } catch (error) {
@@ -235,14 +267,14 @@ export default function CustomProductForm() {
   return (
     <section className="w-full bg-background py-10 text-foreground">
 
-      <div className="mx-auto max-w-[1650px] px-6 md:px-8 lg:px-10">
+      <div className={PAGE_CONTAINER_CLASS}>
 
-        <div className="rounded-2xl border border-border bg-surface p-6 shadow-2xl lg:p-10 theme-light:shadow-md">
+        <div className="rounded-2xl border border-border bg-surface p-4 sm:p-6 shadow-2xl lg:p-10 theme-light:shadow-md">
 
           {/* HEADER */}
           <div className="mb-5 flex flex-col items-center text-center">
 
-            <h2 className="text-3xl font-bold uppercase tracking-wide">
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold uppercase tracking-wide">
               Submit Your Requirement
             </h2>
 
@@ -257,8 +289,8 @@ export default function CustomProductForm() {
             <div
               className={`mb-6 flex items-center gap-3 rounded-lg border px-4 py-3 text-sm ${
                 message.type === 'success'
-                  ? 'border-green-500/30 bg-green-500/10 text-green-400'
-                  : 'border-red-500/30 bg-red-500/10 text-red-400'
+                  ? 'border-green-600/35 bg-green-500/10 text-green-700 theme-dark:text-green-400'
+                  : 'border-red-600/35 bg-red-500/10 text-red-700 theme-dark:text-red-400'
               }`}
             >
 
@@ -399,9 +431,24 @@ export default function CustomProductForm() {
                 name="casNo"
                 value={formData.casNo}
                 onChange={handleChange}
-                placeholder="Enter CAS Number"
-                className={inputClass}
+                onBlur={handleCasBlur}
+                placeholder="e.g. 67-64-1"
+                className={`${inputClass} ${
+                  errors.casNo
+                    ? errorInputClass
+                    : ''
+                }`}
               />
+
+              {errors.casNo ? (
+                <p className={errorTextClass}>
+                  {errors.casNo}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted">
+                  Format: e.g. 00-00-0 or 67-64-1
+                </p>
+              )}
 
             </div>
 
@@ -423,7 +470,7 @@ export default function CustomProductForm() {
                   value={formData.quantity}
                   onChange={handleChange}
                   placeholder="Enter quantity"
-                  className={`${inputClass} flex-1 ${
+                  className={`${inputClass} min-w-0 flex-1 ${
                     errors.quantity
                       ? errorInputClass
                       : ''
@@ -547,6 +594,7 @@ export default function CustomProductForm() {
                 </p>
 
                 <input
+                  ref={fileInputRef}
                   type="file"
                   hidden
                   onChange={handleFileChange}
@@ -581,7 +629,7 @@ export default function CustomProductForm() {
                 }
                 onChange={handleChange}
                 placeholder="Please provide detailed specification..."
-                className={`h-[60px] w-full rounded-md border bg-surface-elevated px-4 py-4 text-sm text-foreground outline-none placeholder:text-muted ${
+                className={`min-h-[120px] w-full rounded-md border bg-surface-elevated px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted ${
                   errors.detailedRequirement
                     ? 'border-red-500'
                     : 'border-border'
@@ -599,12 +647,12 @@ export default function CustomProductForm() {
             </div>
 
             {/* BUTTONS */}
-            <div className="flex justify-center gap-4 lg:col-span-12">
+            <div className="flex flex-col-reverse sm:flex-row justify-center gap-3 sm:gap-4 lg:col-span-12">
 
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex h-[46px] items-center gap-2 rounded-md border border-border px-6 text-sm font-medium text-foreground transition-all hover:bg-surface-elevated"
+                className="flex h-[46px] items-center justify-center gap-2 rounded-md border border-border px-6 text-sm font-medium text-foreground transition-all hover:bg-surface-elevated"
               >
 
                 <RotateCcw className="h-4 w-4" />
@@ -616,7 +664,7 @@ export default function CustomProductForm() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex h-[46px] items-center gap-2 rounded-md bg-primary px-7 text-sm font-medium text-white transition-all hover:bg-primary-hover"
+                className="flex h-[46px] items-center justify-center gap-2 rounded-md bg-primary px-7 text-sm font-medium text-white transition-all hover:bg-primary-hover"
               >
 
                 <Send className="h-4 w-4" />

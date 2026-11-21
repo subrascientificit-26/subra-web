@@ -20,6 +20,8 @@ import {
 } from '@/components/ui';
 import type { CategoryGroup } from '@/components/ui/CategorySidebar';
 import { ROUTES } from '@/lib/routes';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
+import { useLiveUpdates } from '@/lib/hooks/useLiveUpdates';
 import {
   filterProducts,
   formatProducts,
@@ -123,8 +125,8 @@ export default function ProductsPageContent() {
     }
   };
 
-  useEffect(() => {
-    fetch('/api/category')
+  const loadCategories = () => {
+    fetch('/api/category', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data)) return;
@@ -135,17 +137,33 @@ export default function ProductsPageContent() {
         setCategoryMap(map);
       })
       .catch(() => { });
-  }, []);
+  };
 
-  useEffect(() => {
-    fetch('/api/subcategory')
+  const loadSubCategories = () => {
+    fetch('/api/subcategory', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data)) return;
         setSubCategoryRecords(data);
       })
       .catch(() => { });
+  };
+
+  useEffect(() => {
+    loadCategories();
   }, []);
+
+  useEffect(() => {
+    loadSubCategories();
+  }, []);
+
+  useLiveUpdates(['products'], () => {
+    void loadProducts(false);
+  });
+
+  useLiveUpdates(['categories'], loadCategories);
+
+  useLiveUpdates(['subcategories'], loadSubCategories);
 
   useEffect(() => {
     if (categoryParam && categoryMap[categoryParam]) {
@@ -222,8 +240,8 @@ export default function ProductsPageContent() {
       <Navbar />
 
       <div className="flex-grow">
-        <div className="mx-auto max-w-[1650px] px-3 py-4 sm:px-5 lg:px-6">
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[280px_1fr]">
+        <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
             <div className="lg:hidden">
               <button
                 type="button"
@@ -257,7 +275,7 @@ export default function ProductsPageContent() {
                 ]}
               />
 
-              <div className="mb-5 flex items-center gap-4">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                 {/* Showing */}
                 <p className="shrink-0 text-sm text-muted">
                   Showing {sortedProducts.length} result
@@ -265,7 +283,7 @@ export default function ProductsPageContent() {
                 </p>
 
                 {/* Search */}
-                <div className="flex-1">
+                <div className="w-full sm:flex-1 sm:min-w-[200px]">
                   <SearchInput
                     value={searchTerm}
                     onChange={setSearchTerm}

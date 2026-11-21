@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { ROUTES } from '@/lib/routes';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 import { useSiteSettings } from '@/lib/hooks/useSiteSettings';
 import WidgetCardIcon from '@/components/WidgetCardIcon';
 import { ChevronRight } from 'lucide-react';
@@ -22,13 +23,13 @@ export default function Hero() {
   return (
     <section className="bg-background text-foreground overflow-hidden">
 
-      <div className="max-w-[98%] mx-auto sm:px-3">
+      <div className={PAGE_CONTAINER_CLASS}>
 
         {/* ================= HERO GRID ================= */}
-        <div className="grid lg:grid-cols-[40%_60%] mt-5 mb-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-6 lg:gap-8 items-center mt-5 mb-5">
 
           {/* ================= CONTENT ================= */}
-          <div className="order-1 max-w-xl">
+          <div className="order-1 min-w-0 max-w-xl">
 
             <p className="text-primary text-sm sm:text-base lg:text-lg font-semibold mt-5">
               WELCOME TO
@@ -70,7 +71,7 @@ export default function Hero() {
           </div>
 
           {/* ================= IMAGE ================= */}
-          <div className="order-2 relative h-[150px] sm:h-[200px] lg:h-[320px] overflow-hidden rounded-2xl border border-border">
+          <div className="order-2 relative h-[190px] sm:h-[240px] lg:h-[320px] overflow-hidden rounded-2xl border border-border">
 
             <Image
               src="/Lab-test.jpg"
@@ -89,21 +90,21 @@ export default function Hero() {
             <div className="absolute inset-0 bg-[linear-gradient(to_top,#020817_0%,rgba(2,8,23,0.9)_12%,rgba(2,8,23,0)_35%)] theme-light:hidden"></div>
 
             {/* Blue Effect */}
-            <div className="absolute inset-0 bg-blue-900/10"></div>
+            <div className="absolute inset-0 bg-blue-900/10 theme-light:bg-primary/5"></div>
           </div>
         </div>
 
         {/* ================= FEATURES ================= */}
         {heroCards.length > 0 ? (
           <div>
-            <div className="border border-border rounded-2xl overflow-hidden bg-surface backdrop-blur-sm">
+            <div className="border border-border rounded-2xl overflow-hidden bg-border backdrop-blur-sm">
               <div
-                className={`grid divide-y sm:divide-y-0 sm:divide-x divide-border ${getHeroGridClass(heroCards.length)}`}
+                className={`grid gap-px ${getHeroGridClass(heroCards.length)}`}
               >
                 {heroCards.map((feature) => (
                   <div
                     key={feature.id}
-                    className="flex items-center gap-4 px-4 sm:px-6 py-4"
+                    className="flex items-center gap-4 bg-surface px-4 sm:px-6 py-4"
                   >
                     <div className="flex-shrink-0">
                       <div
@@ -111,6 +112,7 @@ export default function Hero() {
                           w-14 h-14 sm:w-16 sm:h-16
                           rounded-full
                           border border-primary/40
+                          bg-surface-elevated theme-light:bg-primary/5
                           flex items-center justify-center
                         "
                       >

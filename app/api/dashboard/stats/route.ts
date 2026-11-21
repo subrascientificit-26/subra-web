@@ -16,6 +16,7 @@ export async function GET(req: Request) {
         select: {
           id: true,
           subject: true,
+          fileUrl: true,
           createdAt: true,
         },
       }),
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
       recentEnquiries: enquiries.slice(0, 3).map((enquiry) => ({
         id: `ENQ-${String(enquiry.id).padStart(5, "0")}`,
         title: enquiry.subject || "Enquiry",
+        fileUrl: enquiry.fileUrl,
         date: new Date(enquiry.createdAt).toLocaleDateString("en-IN"),
       })),
     });

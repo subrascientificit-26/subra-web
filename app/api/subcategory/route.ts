@@ -8,6 +8,10 @@ import {
   findDuplicateSubCategory,
 } from "@/lib/duplicateNames";
 import { DELETE_MESSAGES } from "@/lib/messages";
+import { DEFAULT_PRODUCT_IMAGE } from "@/lib/products";
+import { emitRealtimeUpdate } from "@/lib/realtime";
+
+export const dynamic = "force-dynamic";
 
 // GET
 export async function GET() {
@@ -21,7 +25,12 @@ export async function GET() {
     orderBy: { id: "desc" },
   });
 
-  return Response.json(data);
+  return Response.json(
+    data.map((sub) => ({
+      ...sub,
+      image: sub.image || DEFAULT_PRODUCT_IMAGE,
+    }))
+  );
 }
 
 // CREATE
@@ -73,10 +82,12 @@ export async function POST(req: Request) {
     data: {
       name,
       description,
-      image: imagePath,
+      image: imagePath || DEFAULT_PRODUCT_IMAGE,
       categoryId
     }
   });
+
+  emitRealtimeUpdate(["subcategories", "categories", "products", "dashboard"], "subcategory-created");
 
   return Response.json(sub);
 }
@@ -145,6 +156,8 @@ export async function PUT(req: Request) {
       include: { category: true }
     });
 
+    emitRealtimeUpdate(["subcategories", "categories", "products", "dashboard"], "subcategory-updated");
+
     return Response.json(updated);
   } catch (err: any) {
     return Response.json({ error: err.message }, { status: 500 });
@@ -187,6 +200,8 @@ export async function DELETE(req: Request) {
   }
 
   await prisma.subCategory.delete({ where: { id } });
+
+  emitRealtimeUpdate(["subcategories", "categories", "products", "dashboard"], "subcategory-deleted");
 
   return Response.json({ message: "Deleted" });
 }

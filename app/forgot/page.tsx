@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
 import { useRouter } from "next/navigation";
 import { Inter } from "next/font/google";
 import { FaEnvelope, FaArrowLeft } from "react-icons/fa";
+import { ROUTES } from "@/lib/routes";
 import ThemeToggle from "@/components/ThemeToggle";
 import {
   AUTH_CARD_ACCENT_LINE_CLASS,
@@ -30,7 +33,7 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
-  const { toasts, removeToast, showError, showSuccess } = useToast();
+  const { toasts, removeToast, showError } = useToast();
 
   const handleForgotPassword = async () => {
     setSuccess("");
@@ -65,11 +68,8 @@ export default function ForgotPasswordPage() {
       const successMsg = "Reset link sent to your email! Check your inbox.";
       setSuccess(successMsg);
       setMessage(successMsg);
-      showSuccess(successMsg);
-
-      setTimeout(() => {
-        router.push("/login");
-      }, 3000);
+      toast.success(successMsg);
+      router.push(ROUTES.login);
     } catch (error) {
       showError("Something went wrong");
     } finally {
@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
         <ThemeToggle />
       </div>
 
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pt-16 pb-6">
 
         <div className={AUTH_CARD_CLASS}>
 
@@ -133,13 +133,13 @@ export default function ForgotPasswordPage() {
           </button>
 
           <div className="mt-5 text-center">
-            <button
-              onClick={() => router.push("/login")}
-              className={`flex items-center justify-center gap-2 ${AUTH_LINK_CLASS} mx-auto`}
+            <Link
+              href={ROUTES.login}
+              className={`inline-flex items-center justify-center gap-2 ${AUTH_LINK_CLASS} mx-auto`}
             >
               <FaArrowLeft />
               Back to Login
-            </button>
+            </Link>
           </div>
 
         </div>

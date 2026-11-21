@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PageHero } from "@/components/ui";
 import InfoSection from "@/components/InfoSection";
 import { ROUTES } from "@/lib/routes";
+import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
 import { useSiteSettings } from "@/lib/hooks/useSiteSettings";
 
 export default function TermsContent() {
@@ -13,7 +14,7 @@ export default function TermsContent() {
 
   return (
     <div className="flex-grow">
-      <div className="max-w-[1650px] mx-auto px-3 sm:px-5 lg:px-6 py-4">
+      <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
         <PageHero
           title="Terms & Conditions"
           description={`Please read these terms carefully before using ${siteTitle || "our"} product catalogue, enquiry services, or website.`}

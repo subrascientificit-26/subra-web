@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
 import { Inter } from "next/font/google";
@@ -21,6 +21,7 @@ import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
 import AuthPageBranding from "@/components/AuthPageBranding";
 import ThemeToggle from "@/components/ThemeToggle";
+import { ROUTES } from "@/lib/routes";
 import {
   AUTH_CARD_ACCENT_LINE_CLASS,
   AUTH_CARD_CLASS,
@@ -45,13 +46,24 @@ import {
   AUTH_ACCENT_LINE_CLASS,
 } from "@/lib/authPageStyles";
 
+const emptySubscribe = () => () => {};
+
 const inter = Inter({
   subsets: ["latin"],
 });
 
 export default function LoginPage() {
   const router = useRouter();
-  const [verified, setVerified] = useState<string | null>(null);
+  const searchString = useSyncExternalStore(
+    emptySubscribe,
+    () => window.location.search,
+    () => ""
+  );
+  const urlSearchParams = new URLSearchParams(searchString);
+  const verified = urlSearchParams.get("verified");
+  const registered = urlSearchParams.get("registered");
+  const registeredEmail = urlSearchParams.get("email") || "";
+  const urlError = urlSearchParams.get("error");
 
   const [showPassword, setShowPassword] =
     useState(false);
@@ -66,33 +78,14 @@ export default function LoginPage() {
 
   const [loading, setLoading] =
     useState(false);
+  const [needsVerification, setNeedsVerification] =
+    useState(false);
+  const [resendingVerification, setResendingVerification] =
+    useState(false);
+  const [resendFeedback, setResendFeedback] =
+    useState<{ type: "success" | "error"; text: string } | null>(null);
   const { toasts, removeToast, showError, showSuccess } = useToast();
-  const [error, setError] =
-    useState("");
 
-  // =========================
-  // LOAD REMEMBERED EMAIL
-  // =========================
-  useEffect(() => {
-    const savedEmail =
-      localStorage.getItem("rememberedEmail");
-
-    const remembered =
-      localStorage.getItem("rememberMe");
-
-    // if (
-    //   savedEmail &&
-    //   remembered === "true"
-    // ) {
-    //   // setEmail(savedEmail);
-    //   // setRememberMe(true);
-    // } else {
-    //   setRememberMe(false);
-    // }
-
-    const params = new URLSearchParams(window.location.search);
-    setVerified(params.get("verified"));
-  }, []);
   // =========================
   // VALIDATION
   // =========================
@@ -133,6 +126,46 @@ export default function LoginPage() {
     return true;
   };
 
+  const handleResendVerification = async (targetEmail: string) => {
+    const cleanEmail = targetEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      const msg = "Enter your email address above first, then click Resend.";
+      setResendFeedback({ type: "error", text: msg });
+      showError(msg);
+      return;
+    }
+
+    setResendingVerification(true);
+    setResendFeedback(null);
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = data.error || "Failed to resend verification email";
+        setResendFeedback({ type: "error", text: msg });
+        showError(msg);
+        return;
+      }
+
+      const msg =
+        data.message ||
+        `Verification email sent to ${cleanEmail}. Check Inbox and Spam.`;
+      setResendFeedback({ type: "success", text: msg });
+      showSuccess(msg);
+    } catch {
+      const msg = "Could not resend verification email. Please try again.";
+      setResendFeedback({ type: "error", text: msg });
+      showError(msg);
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
   // =========================
   // LOGIN
   // =========================
@@ -140,6 +173,7 @@ export default function LoginPage() {
     e: React.FormEvent<HTMLFormElement>
   ) => {
     e.preventDefault();
+    setNeedsVerification(false);
 
     if (!validate()) return;
 
@@ -165,6 +199,9 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.code === "EMAIL_NOT_VERIFIED") {
+          setNeedsVerification(true);
+        }
         showError(
           data.error || "Login failed"
         );
@@ -226,15 +263,12 @@ export default function LoginPage() {
       // =========================
       // REDIRECT
       // =========================
-      if (
+      const targetRoute =
         data.user?.role === "admin"
-      ) {
-        window.location.href =
-          "/admin/dashboard";
-      } else {
-        window.location.href =
-          "/dashboard";
-      }
+          ? ROUTES.admin.dashboard
+          : ROUTES.dashboard;
+      router.replace(targetRoute);
+      router.refresh();
     } catch (err) {
       console.error(
         "Login error:",
@@ -268,7 +302,7 @@ export default function LoginPage() {
       <div className="relative z-10 flex min-h-screen flex-col">
         <div className="flex flex-1 flex-col lg:flex-row">
           {/* LEFT */}
-          <div className="flex w-full items-center justify-start px-4 py-6 sm:px-6 md:px-10 lg:w-1/2 lg:pl-16 lg:pr-[15%]">
+          <div className="flex w-full items-center justify-start px-4 pt-14 pb-6 sm:px-6 sm:pt-16 md:px-10 lg:w-1/2 lg:pt-6 lg:pl-16 lg:pr-[15%]">
             <div className={AUTH_LEFT_PANEL_CLASS}>
               <AuthPageBranding />
 
@@ -342,8 +376,82 @@ export default function LoginPage() {
               <div className={AUTH_CARD_ACCENT_LINE_CLASS} />
 
               {verified === "true" && (
-                <div className="mt-4 rounded-lg border border-green-500/50 bg-green-500/20 px-4 py-3 text-sm text-green-300">
+                <div className="mt-4 rounded-lg border border-green-600/40 bg-green-500/15 px-4 py-3 text-sm text-green-800 theme-dark:border-green-500/50 theme-dark:bg-green-500/20 theme-dark:text-green-300">
                   Email verified successfully. Please login.
+                </div>
+              )}
+
+              {registered === "true" && (
+                <div className="mt-4 space-y-2 rounded-lg border border-blue-600/40 bg-blue-500/15 px-4 py-3 text-sm text-blue-900 theme-dark:border-blue-400/50 theme-dark:bg-blue-500/20 theme-dark:text-blue-200">
+                  <p>
+                    Registration successful! We sent a verification link
+                    {registeredEmail ? (
+                      <>
+                        {" "}
+                        to <strong className="break-all">{registeredEmail}</strong>
+                      </>
+                    ) : null}
+                    . Please check both your <strong>Inbox</strong> and{" "}
+                    <strong>Spam / Updates</strong> folder before logging in.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={resendingVerification}
+                    onClick={() => handleResendVerification(email || registeredEmail)}
+                    className="inline-flex items-center rounded-md border border-blue-700/40 bg-blue-600/15 px-3 py-1.5 text-xs font-semibold text-blue-900 transition hover:bg-blue-600/25 disabled:opacity-50 theme-dark:border-blue-300/40 theme-dark:text-blue-100"
+                  >
+                    {resendingVerification ? "Sending..." : "Didn't receive it? Resend Email"}
+                  </button>
+                </div>
+              )}
+
+              {needsVerification && (
+                <div className="mt-4 space-y-2 rounded-lg border border-amber-600/40 bg-amber-500/15 px-4 py-3 text-sm text-amber-900 theme-dark:border-amber-400/50 theme-dark:bg-amber-500/20 theme-dark:text-amber-200">
+                  <p>
+                    Your email is not verified yet. Check your Inbox &amp; Spam folder, or resend the verification link.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={resendingVerification}
+                    onClick={() => handleResendVerification(email || registeredEmail)}
+                    className="inline-flex items-center rounded-md border border-amber-700/40 bg-amber-600/20 px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-600/30 disabled:opacity-50 theme-dark:border-amber-300/40 theme-dark:text-amber-100"
+                  >
+                    {resendingVerification ? "Sending..." : "Resend Verification Email"}
+                  </button>
+                </div>
+              )}
+
+              {urlError && (
+                <div className="mt-4 space-y-2 rounded-lg border border-red-600/40 bg-red-500/15 px-4 py-3 text-sm text-red-800 theme-dark:border-red-500/50 theme-dark:bg-red-500/20 theme-dark:text-red-300">
+                  <p>
+                    {urlError === "token-expired"
+                      ? "Your verification link has expired. Enter your email below and resend a new verification link."
+                      : urlError === "invalid-token"
+                        ? "Invalid verification link. Enter your email below to resend a new verification email."
+                        : "Could not verify email. Please try again."}
+                  </p>
+                  {(urlError === "token-expired" || urlError === "invalid-token") && (
+                    <button
+                      type="button"
+                      disabled={resendingVerification}
+                      onClick={() => handleResendVerification(email || registeredEmail)}
+                      className="inline-flex items-center rounded-md border border-red-700/40 bg-red-600/15 px-3 py-1.5 text-xs font-semibold text-red-900 transition hover:bg-red-600/25 disabled:opacity-50 theme-dark:border-red-400/40 theme-dark:text-red-200"
+                    >
+                      {resendingVerification ? "Sending..." : "Resend Verification Email"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {resendFeedback && (
+                <div
+                  className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
+                    resendFeedback.type === "success"
+                      ? "border-green-600/40 bg-green-500/15 text-green-800 theme-dark:border-green-500/50 theme-dark:bg-green-500/20 theme-dark:text-green-300"
+                      : "border-red-600/40 bg-red-500/15 text-red-800 theme-dark:border-red-500/50 theme-dark:bg-red-500/20 theme-dark:text-red-300"
+                  }`}
+                >
+                  {resendFeedback.text}
                 </div>
               )}
 
@@ -423,23 +531,18 @@ export default function LoginPage() {
                           e.target.checked
                         )
                       }
-                      className="cursor-pointer accent-blue-500"
+                      className="cursor-pointer accent-primary"
                     />
 
                     Remember me
                   </label>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(
-                        "/forgot"
-                      )
-                    }
+                  <Link
+                    href={ROUTES.forgotPassword}
                     className={AUTH_LINK_CLASS}
                   >
                     Forgot Password?
-                  </button>
+                  </Link>
                 </div>
 
                 {/* LOGIN */}
@@ -464,15 +567,13 @@ export default function LoginPage() {
               </div>
 
               {/* REGISTER */}
-              <Link href="/register">
-                <button
-                  type="button"
-                  className={AUTH_SECONDARY_BTN_CLASS}
-                >
-                  <HiOutlineUserGroup className="text-lg text-primary" />
+              <Link
+                href={ROUTES.register}
+                className={AUTH_SECONDARY_BTN_CLASS}
+              >
+                <HiOutlineUserGroup className="text-lg text-primary" />
 
-                  <span>Register</span>
-                </button>
+                <span>Register</span>
               </Link>
             </div>
           </div>

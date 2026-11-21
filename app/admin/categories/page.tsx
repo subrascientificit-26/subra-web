@@ -8,6 +8,7 @@ import { RequiredMark } from "@/components/ui/FieldLabel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 import AdminListLayout from "@/components/admin/AdminListLayout";
 import AdminTableSection from "@/components/admin/AdminTableSection";
 import AdminActionButtons from "@/components/admin/AdminActionButtons";
@@ -66,22 +67,28 @@ export default function CategoryPage() {
   // =========================
   // DATA SYNC LOGIC
   // =========================
-  const loadCategories = useCallback(async () => {
+  const loadCategories = useCallback(async (showLoader = true) => {
     try {
-      setTableLoading(true);
+      if (showLoader) setTableLoading(true);
       const res = await fetch("/api/category", { cache: "no-store" });
       const data = await res.json();
       setCategories(Array.isArray(data) ? data : []);
     } catch {
-      showError("Failed to synchronize category engine registry.");
+      if (showLoader) {
+        showError("Failed to synchronize category engine registry.");
+      }
     } finally {
-      setTableLoading(false);
+      if (showLoader) setTableLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadCategories();
+    loadCategories(true);
   }, [loadCategories]);
+
+  useLiveUpdates(["categories", "subcategories", "products"], () => {
+    void loadCategories(false);
+  });
 
   // =========================
   // MUTATION HANDLERS
@@ -231,7 +238,7 @@ export default function CategoryPage() {
         <span
           className={`px-2.5 py-0.5 text-xs font-semibold rounded-full font-mono ${
             row.subcategories?.length
-              ? "bg-indigo-500/10 border border-indigo-500/20 text-indigo-400"
+              ? "bg-indigo-500/10 border border-indigo-500/30 text-indigo-700 theme-dark:text-indigo-300"
               : ADMIN_EMPTY_BADGE_CLASS
           }`}
         >
@@ -249,7 +256,7 @@ export default function CategoryPage() {
         <span
           className={`px-2.5 py-0.5 text-xs font-semibold rounded-full font-mono ${
             row.productCount
-              ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+              ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 theme-dark:text-emerald-400"
               : ADMIN_EMPTY_BADGE_CLASS
           }`}
         >
@@ -273,12 +280,12 @@ export default function CategoryPage() {
   return (
     <AdminListLayout>
       <h2 className="text-xl font-bold text-foreground mb-3">Category</h2>
-      <div className="bg-background text-foreground p-4 lg:p-0 selection:bg-blue-500/30 antialiased">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <div className="bg-background text-foreground p-0 selection:bg-blue-500/30 antialiased">
+        <div className="w-full space-y-6">
           <ToastContainer toasts={toasts} onClose={removeToast} />
 
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
-            <div className={`xl:col-span-1 ${ADMIN_CARD_CLASS} sticky top-6 space-y-5`}>
+            <div className={`min-w-0 xl:col-span-1 ${ADMIN_CARD_CLASS} xl:sticky xl:top-6 space-y-5`}>
               <div className="space-y-4">
                 <div>
                   <label className={ADMIN_LABEL_CLASS}>
@@ -293,7 +300,7 @@ export default function CategoryPage() {
                     className={withFieldError(ADMIN_INPUT_CLASS, Boolean(formErrors.name))}
                   />
                   {formErrors.name && (
-                    <p className="text-[11px] text-red-400 mt-1.5 flex items-center gap-1 font-medium">
+                    <p className="text-[11px] text-red-600 theme-dark:text-red-400 mt-1.5 flex items-center gap-1 font-medium">
                       {formErrors.name}
                     </p>
                   )}
@@ -333,7 +340,7 @@ export default function CategoryPage() {
                     className={withFieldError(ADMIN_TEXTAREA_CLASS, Boolean(formErrors.description))}
                   />
                   {formErrors.description && (
-                    <p className="text-[11px] text-red-400 mt-1.5 font-medium">
+                    <p className="text-[11px] text-red-600 theme-dark:text-red-400 mt-1.5 font-medium">
                       {formErrors.description}
                     </p>
                   )}
@@ -343,7 +350,7 @@ export default function CategoryPage() {
                   <button
                     onClick={handleSave}
                     disabled={loading}
-                    className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm disabled:opacity-40 transition-all shadow-lg shadow-blue-600/10"
+                    className="w-full h-11 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm disabled:opacity-40 transition-all shadow-sm"
                   >
                     {loading
                       ? "Processing Payload..."

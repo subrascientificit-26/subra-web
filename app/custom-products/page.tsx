@@ -6,7 +6,7 @@ import CustomProductFeatures from "@/components/CustomProductFeatures";
 import Footer from "@/components/Footer";
 
 export const metadata = {
-  title: "Custom Products | Patient Catalogue",
+  title: "Custom Products | Subra Catalogue",
   description:
     "Get tailored solutions for your unique chemical requirements. Custom manufacturing services with quality assurance and timely delivery.",
 };

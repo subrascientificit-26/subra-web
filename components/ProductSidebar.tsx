@@ -19,7 +19,7 @@ export default function ProductSidebar({
 
   return (
     <aside className="w-full md:w-56 lg:w-64 flex-shrink-0 space-y-5">
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm theme-dark:shadow-lg">
         <div className="border-b border-border px-4 py-4">
           <h3 className="text-sm font-bold uppercase tracking-wide text-primary lg:text-base">
             Categories
@@ -52,7 +52,7 @@ export default function ProductSidebar({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-5 shadow-lg">
+      <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm theme-dark:shadow-lg">
         <div className="mb-4 flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20">
             <Headphones size={18} className="text-primary" />

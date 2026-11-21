@@ -17,8 +17,13 @@ interface EnquirySelectionContextValue {
   count: number;
   subtotal: number;
   addItem: (item: EnquirySelection) => void;
-  removeItem: (id: number, packSize: string) => void;
-  updateQuantity: (id: number, packSize: string, quantity: number) => void;
+  removeItem: (id: number, packSize: string, source?: "product" | "external") => void;
+  updateQuantity: (
+    id: number,
+    packSize: string,
+    quantity: number,
+    source?: "product" | "external"
+  ) => void;
   clearItems: () => void;
 }
 
@@ -26,8 +31,17 @@ const STORAGE_KEY = "site-enquiry-selections";
 const EnquirySelectionContext =
   createContext<EnquirySelectionContextValue | null>(null);
 
-function sameLine(item: EnquirySelection, id: number, packSize: string) {
-  return item.id === id && item.packSize === packSize;
+function sameLine(
+  item: EnquirySelection,
+  id: number,
+  packSize: string,
+  source: "product" | "external" = "product"
+) {
+  return (
+    item.id === id &&
+    item.packSize === packSize &&
+    (item.source ?? "product") === source
+  );
 }
 
 export default function EnquirySelectionProvider({
@@ -39,15 +53,22 @@ export default function EnquirySelectionProvider({
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const parsed = stored ? JSON.parse(stored) : null;
-      if (Array.isArray(parsed)) setItems(parsed);
-    } catch {
-      // Ignore malformed storage.
-    } finally {
-      setHydrated(true);
-    }
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        const parsed = stored ? JSON.parse(stored) : null;
+        if (Array.isArray(parsed)) setItems(parsed);
+      } catch {
+        // Ignore malformed storage.
+      } finally {
+        setHydrated(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -60,28 +81,43 @@ export default function EnquirySelectionProvider({
   }, [hydrated, items]);
 
   const addItem = useCallback((item: EnquirySelection) => {
+    const source = item.source ?? "product";
     setItems((current) => {
-      const existing = current.find((line) => sameLine(line, item.id, item.packSize));
+      const existing = current.find((line) =>
+        sameLine(line, item.id, item.packSize, source)
+      );
       if (!existing) return [...current, item];
 
       return current.map((line) =>
-        sameLine(line, item.id, item.packSize)
+        sameLine(line, item.id, item.packSize, source)
           ? { ...line, quantity: line.quantity + item.quantity }
           : line
       );
     });
   }, []);
 
-  const removeItem = useCallback((id: number, packSize: string) => {
-    setItems((current) => current.filter((item) => !sameLine(item, id, packSize)));
-  }, []);
+  const removeItem = useCallback(
+    (id: number, packSize: string, source: "product" | "external" = "product") => {
+      setItems((current) =>
+        current.filter((item) => !sameLine(item, id, packSize, source))
+      );
+    },
+    []
+  );
 
   const updateQuantity = useCallback(
-    (id: number, packSize: string, quantity: number) => {
+    (
+      id: number,
+      packSize: string,
+      quantity: number,
+      source: "product" | "external" = "product"
+    ) => {
       const nextQuantity = Math.max(1, Math.floor(quantity) || 1);
       setItems((current) =>
         current.map((item) =>
-          sameLine(item, id, packSize) ? { ...item, quantity: nextQuantity } : item
+          sameLine(item, id, packSize, source)
+            ? { ...item, quantity: nextQuantity }
+            : item
         )
       );
     },

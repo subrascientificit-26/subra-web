@@ -7,6 +7,7 @@ import {
     Truck,
 } from 'lucide-react';
 import { ArrowRight } from 'lucide-react';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 
 export default function CustomizationProcess() {
     const steps = [
@@ -45,39 +46,39 @@ export default function CustomizationProcess() {
     return (
         <div className="w-full bg-background text-foreground">
 
-            <div className="max-w-[1600px] mx-auto px-6 md:px-8 lg:px-12 py-0">
+            <div className={PAGE_CONTAINER_CLASS}>
 
-                <div className="border border-border rounded-2xl bg-surface px-6 py-6 md:px-20 md:py-4 shadow-lg theme-light:shadow-m mt-10">
+                <div className="border border-border rounded-2xl bg-surface px-4 py-6 sm:px-6 xl:px-8 xl:py-6 shadow-sm theme-dark:shadow-lg theme-light:shadow-md mt-8 sm:mt-10">
 
-                    <h2 className="text-2xl md:text-xl font-bold text-center text-foreground">
+                    <h2 className="text-lg sm:text-2xl xl:text-xl font-bold text-center text-foreground">
                         OUR CUSTOMIZATION PROCESS
                     </h2>
 
-                    <div className="hidden md:flex items-start justify-center gap-5 mt-6">
+                    <div className="hidden xl:flex items-start justify-between gap-2 mt-6">
                         {steps.map((step, index) => (
-                            <div key={step.number} className="flex items-center">
+                            <div key={step.number} className="flex flex-1 min-w-0 items-center justify-center">
 
-                                <div className="flex flex-col items-center text-center w-[170px] flex-shrink-0">
+                                <div className="flex flex-col items-center text-center min-w-0 flex-1 px-2">
 
-                                    <div className="h-16 w-16 rounded-full border-2 border-primary text-primary mb-4 flex items-center justify-center">
+                                    <div className="h-16 w-16 rounded-full border-2 border-primary text-primary mb-4 flex items-center justify-center shrink-0">
                                         {step.icon}
                                     </div>
 
-                                    <h3 className="font-semibold text-sm text-foreground whitespace-nowrap h-[20px] flex items-center">
+                                    <h3 className="font-semibold text-sm text-foreground flex items-center justify-center">
                                         {step.title}
                                     </h3>
 
-                                    <p className="text-muted text-sm leading-6 mt-2 h-[48px] flex items-start justify-center">
+                                    <p className="text-muted text-xs 2xl:text-sm leading-5 mt-2 flex items-start justify-center">
                                         {step.description}
                                     </p>
                                 </div>
 
                                 {index < steps.length - 1 && (
-                                    <div className="flex items-center px-4">
-                                        <div className="w-16 border-t-2 border-dashed border-primary"></div>
+                                    <div className="flex items-center px-1 shrink-0">
+                                        <div className="w-6 2xl:w-10 border-t-2 border-dashed border-primary"></div>
 
                                         <ArrowRight
-                                            size={20}
+                                            size={18}
                                             className="text-primary -ml-1 flex-shrink-0"
                                         />
                                     </div>
@@ -86,7 +87,7 @@ export default function CustomizationProcess() {
                         ))}
                     </div>
 
-                    <div className="md:hidden mt-10 space-y-5">
+                    <div className="xl:hidden mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                         {steps.map((step) => (
                             <div

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Toaster } from "sonner";
+import ThemedToaster from "@/components/ThemedToaster";
 import ThemeProvider from "@/components/ThemeProvider";
 import CartProvider from "@/components/CartProvider";
 import EnquirySelectionProvider from "@/components/EnquirySelectionProvider";
@@ -37,7 +37,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem("site-theme-preference");var m=s==="light"||s==="dark"?s:"dark";document.documentElement.classList.remove("theme-dark","theme-light");document.documentElement.classList.add(m==="light"?"theme-light":"theme-dark");}catch(e){document.documentElement.classList.add("theme-dark");}})();`,
+            __html: `(function(){try{var s=localStorage.getItem("site-theme-preference");var m=s==="light"||s==="dark"?s:"dark";document.documentElement.classList.remove("theme-dark","theme-light");document.documentElement.classList.add(m==="light"?"theme-light":"theme-dark");document.documentElement.style.colorScheme=m;}catch(e){document.documentElement.classList.add("theme-dark");document.documentElement.style.colorScheme="dark";}})();`,
           }}
         />
       </head>
@@ -50,12 +50,7 @@ export default function RootLayout({
           </CartProvider>
         </ThemeProvider>
 
-        <Toaster
-          position="top-right"
-          richColors
-          closeButton
-          duration={3000}
-        />
+        <ThemedToaster />
       </body>
     </html>
   );

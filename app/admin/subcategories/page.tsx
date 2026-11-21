@@ -8,6 +8,7 @@ import { RequiredMark } from "@/components/ui/FieldLabel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 import AdminListLayout from "@/components/admin/AdminListLayout";
 import AdminTableSection from "@/components/admin/AdminTableSection";
 import AdminActionButtons from "@/components/admin/AdminActionButtons";
@@ -61,22 +62,24 @@ export default function SubCategoryPage() {
   // =========================
   // DATA SYNC LOGIC
   // =========================
-  const loadSubcategories = useCallback(async () => {
+  const loadSubcategories = useCallback(async (showLoader = true) => {
     try {
-      setTableLoading(true);
+      if (showLoader) setTableLoading(true);
       const res = await fetch("/api/subcategory", { cache: "no-store" });
       const data = await res.json();
       setSubcategories(Array.isArray(data) ? data : []);
     } catch {
-      showError("Failed to sync subcategories matrix.");
+      if (showLoader) {
+        showError("Failed to sync subcategories matrix.");
+      }
     } finally {
-      setTableLoading(false);
+      if (showLoader) setTableLoading(false);
     }
   }, []);
 
   const loadCategories = useCallback(async () => {
     try {
-      const res = await fetch("/api/category");
+      const res = await fetch("/api/category", { cache: "no-store" });
       const data = await res.json();
       setCategories(Array.isArray(data) ? data : []);
     } catch {
@@ -85,9 +88,18 @@ export default function SubCategoryPage() {
   }, []);
 
   useEffect(() => {
-    loadSubcategories();
+    loadSubcategories(true);
     loadCategories();
   }, [loadSubcategories, loadCategories]);
+
+  useLiveUpdates(["subcategories", "products"], () => {
+    void loadSubcategories(false);
+  });
+
+  useLiveUpdates(["categories"], () => {
+    void loadCategories();
+    void loadSubcategories(false);
+  });
 
   // =========================
   // MUTATION HANDLERS
@@ -233,7 +245,7 @@ export default function SubCategoryPage() {
         <span
           className={`px-2.5 py-0.5 text-xs font-semibold rounded-full font-mono ${
             row._count?.products
-              ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+              ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 theme-dark:text-emerald-400"
               : ADMIN_EMPTY_BADGE_CLASS
           }`}
         >
@@ -258,14 +270,14 @@ export default function SubCategoryPage() {
     <AdminListLayout>
       
       <h2 className="text-xl font-bold text-foreground mb-3">Subcategory</h2>
-    <div className="bg-background text-foreground p-4 lg:p-0 selection:bg-blue-500/30">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="bg-background text-foreground p-0 selection:bg-blue-500/30">
+      <div className="w-full space-y-6">
 
         <ToastContainer toasts={toasts} onClose={removeToast} />
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
 
-          <div className={`xl:col-span-1 ${ADMIN_CARD_CLASS} sticky top-6 space-y-5`}>
+          <div className={`min-w-0 xl:col-span-1 ${ADMIN_CARD_CLASS} xl:sticky xl:top-6 space-y-5`}>
 
             <div className="space-y-4">
               <div>
@@ -277,7 +289,7 @@ export default function SubCategoryPage() {
                   <option value="">Choose active node...</option>
                   {categories.map((cat: any) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                 </select>
-                {formErrors.categoryId && <p className="text-[11px] text-red-400 mt-1">{formErrors.categoryId}</p>}
+                {formErrors.categoryId && <p className="text-[11px] text-red-600 theme-dark:text-red-400 mt-1 font-medium">{formErrors.categoryId}</p>}
               </div>
 
               <div>
@@ -286,7 +298,7 @@ export default function SubCategoryPage() {
                   <RequiredMark />
                 </label>
                 <input value={name} placeholder="e.g., Aliphatic Hydrocarbons" onChange={(e) => setName(e.target.value)} className={withFieldError(ADMIN_INPUT_CLASS, Boolean(formErrors.name))} />
-                {formErrors.name && <p className="text-[11px] text-red-400 mt-1">{formErrors.name}</p>}
+                {formErrors.name && <p className="text-[11px] text-red-600 theme-dark:text-red-400 mt-1 font-medium">{formErrors.name}</p>}
               </div>
 
               <div>
@@ -314,11 +326,11 @@ export default function SubCategoryPage() {
               <div>
                 <label className={ADMIN_LABEL_CLASS}>Subcategory Summary</label>
                 <textarea rows={2} value={description} placeholder="Describe the subcategory..." onChange={(e) => setDescription(e.target.value)} className={withFieldError(ADMIN_TEXTAREA_CLASS, Boolean(formErrors.description))} />
-                {formErrors.description && <p className="text-[11px] text-red-400 mt-1">{formErrors.description}</p>}
+                {formErrors.description && <p className="text-[11px] text-red-600 theme-dark:text-red-400 mt-1 font-medium">{formErrors.description}</p>}
               </div>
 
-              <div className="flex gap-2">
-                <button onClick={handleSave} disabled={loading} className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm disabled:opacity-40 transition-all shadow-lg shadow-blue-600/10">
+              <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                <button onClick={handleSave} disabled={loading} className="min-w-[140px] flex-1 h-11 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm disabled:opacity-40 transition-all shadow-sm">
                   {loading ? "Processing..." : editingId ? "Update Subcategory" : "Create Subcategory"}
                 </button>
                 {editingId && (

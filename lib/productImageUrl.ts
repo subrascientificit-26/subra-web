@@ -1,5 +1,13 @@
 import { DEFAULT_PRODUCT_IMAGE } from "@/lib/products";
 
+function safeDecodeSegment(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
 export function resolveProductImageUrl(url?: string | null) {
   const trimmed = url?.trim();
   if (!trimmed) {
@@ -14,12 +22,12 @@ export function resolveProductImageUrl(url?: string | null) {
     return trimmed
       .split("/")
       .map((segment, index) =>
-        index === 0 ? segment : encodeURIComponent(decodeURIComponent(segment))
+        index === 0 ? segment : encodeURIComponent(safeDecodeSegment(segment))
       )
       .join("/");
   }
 
-  return `/${encodeURIComponent(trimmed)}`;
+  return `/${encodeURIComponent(safeDecodeSegment(trimmed))}`;
 }
 
 export function resolveProductDocumentUrl(url?: string | null) {

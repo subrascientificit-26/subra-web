@@ -1,15 +1,86 @@
+import { mkdir, unlink, writeFile } from 'fs/promises';
+import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin, getAuthUser } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import {
-  createMailTransporter,
-  getAdminNotificationEmail,
-  getMailFromAddress,
+  createTransporterFromConfig,
+  formatSmtpFromAddress,
+  getSmtpStatus,
+  resolveAppBaseUrl,
 } from '@/lib/smtp';
 import { generateRandomPassword } from '@/lib/validators';
-import { sendNewAccountCredentialsEmail } from '@/lib/mail';
+import { escapeEmailHtml, sendNewAccountCredentialsEmail } from '@/lib/mail';
 import { getUsernameFromEmail } from '@/lib/messages';
+import { validateEnquiryAttachmentFile } from '@/lib/enquiry';
+import { verifyCaptchaToken } from '@/lib/captcha';
+import { emitRealtimeUpdate } from '@/lib/realtime';
+
+const ENQUIRY_UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'enquiries');
+
+function sanitizeEnquiryFilename(originalName: string) {
+  const baseName = path.basename(originalName || 'attachment');
+  const ext = path.extname(baseName).replace(/[^a-zA-Z0-9.]/g, '').slice(0, 12);
+  const stem = path
+    .basename(baseName, path.extname(baseName))
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+
+  return `${stem || 'file'}${ext || ''}`;
+}
+
+async function saveEnquiryAttachment(file: File): Promise<string> {
+  const validationError = validateEnquiryAttachmentFile(file);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
+  await mkdir(ENQUIRY_UPLOAD_DIR, { recursive: true });
+
+  const safeName = sanitizeEnquiryFilename(file.name);
+  const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
+  const fullPath = path.join(ENQUIRY_UPLOAD_DIR, uniqueName);
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  await writeFile(fullPath, buffer);
+  return `/uploads/enquiries/${uniqueName}`;
+}
+
+async function deleteStoredEnquiryFile(fileUrl?: string | null) {
+  const trimmed = fileUrl?.trim();
+  if (!trimmed || !trimmed.startsWith('/uploads/enquiries/')) return;
+
+  const fileName = trimmed.slice('/uploads/enquiries/'.length);
+  if (!fileName || fileName.includes('/') || fileName.includes('\\')) return;
+
+  const resolvedPath = path.resolve(ENQUIRY_UPLOAD_DIR, fileName);
+  const resolvedRoot = path.resolve(ENQUIRY_UPLOAD_DIR);
+  if (!resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) return;
+
+  await unlink(resolvedPath).catch(() => {});
+}
+
+function parseEnquiryNumericId(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0) {
+    return raw;
+  }
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (/^\d+$/.test(trimmed)) {
+    const parsed = Number.parseInt(trimmed, 10);
+    return parsed > 0 ? parsed : null;
+  }
+  const formattedMatch = trimmed.match(/^ENQ-0*(\d+)$/i);
+  if (formattedMatch?.[1]) {
+    const parsed = Number.parseInt(formattedMatch[1], 10);
+    return parsed > 0 ? parsed : null;
+  }
+  return null;
+}
 
 function mapPublicEnquiry(enquiry: {
   id: number;
@@ -35,6 +106,7 @@ function mapAdminEnquiry(
     subject: string;
     productCategory: string | null;
     message: string;
+    fileUrl: string | null;
     createdAt: Date;
   },
   productIdByCategory: Map<string, number>,
@@ -46,6 +118,7 @@ function mapAdminEnquiry(
     : null;
 
   return {
+    rawId: enquiry.id,
     id: `ENQ-${String(enquiry.id).padStart(5, '0')}`,
     title: enquiry.subject || 'Enquiry',
     date: new Date(enquiry.createdAt).toLocaleDateString('en-IN'),
@@ -58,6 +131,7 @@ function mapAdminEnquiry(
     productCategory,
     productId,
     message: enquiry.message,
+    fileUrl: enquiry.fileUrl,
     hasAccount: accountEmails.has(enquiry.email.toLowerCase()),
     createdAt: enquiry.createdAt.toISOString(),
   };
@@ -120,13 +194,14 @@ async function resolveProductIds(categories: (string | null | undefined)[]) {
 async function autoCreateAccountForEnquiry(details: {
   email: string;
   fullName?: string;
-}) {
+  baseUrl?: string;
+}): Promise<boolean> {
   const email = details.email?.trim().toLowerCase();
-  if (!email) return;
+  if (!email) return false;
 
   try {
     const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) return;
+    if (existingUser) return false;
 
     const password = generateRandomPassword();
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -141,9 +216,16 @@ async function autoCreateAccountForEnquiry(details: {
       },
     });
 
-    await sendNewAccountCredentialsEmail({ email, name, password });
+    await sendNewAccountCredentialsEmail({
+      email,
+      name,
+      password,
+      baseUrl: details.baseUrl,
+    });
+    return true;
   } catch (error) {
     console.error('Failed to auto-create account for enquiry:', error);
+    return false;
   }
 }
 
@@ -207,20 +289,55 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const contentType = req.headers.get('content-type') || '';
 
-    const {
-      fullName,
-      companyName,
-      email,
-      phoneNumber,
-      subject,
-      productCategory,
-      message,
-    } = body;
+    let fullName = '';
+    let companyName = '';
+    let email = '';
+    let phoneNumber = '';
+    let subject = '';
+    let productCategory = '';
+    let message = '';
+    let fileUrl: string | null = null;
+    let uploadedFile: File | null = null;
+    let captchaToken: unknown = '';
+    let captchaAnswer: unknown = '';
 
-    const trimmedMessage =
-      typeof message === 'string' ? message.trim() : '';
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      fullName = formData.get('fullName')?.toString() ?? '';
+      companyName = formData.get('companyName')?.toString() ?? '';
+      email = formData.get('email')?.toString() ?? '';
+      phoneNumber = formData.get('phoneNumber')?.toString() ?? '';
+      subject = formData.get('subject')?.toString() ?? '';
+      productCategory = formData.get('productCategory')?.toString() ?? '';
+      message = formData.get('message')?.toString() ?? '';
+      captchaToken = formData.get('captchaToken')?.toString() ?? '';
+      captchaAnswer = formData.get('captchaAnswer')?.toString() ?? '';
+
+      const uploaded = formData.get('file') ?? formData.get('attachment');
+      if (uploaded instanceof File && uploaded.size > 0) {
+        uploadedFile = uploaded;
+      }
+    } else {
+      const body = await req.json();
+      fullName = typeof body?.fullName === 'string' ? body.fullName : '';
+      companyName = typeof body?.companyName === 'string' ? body.companyName : '';
+      email = typeof body?.email === 'string' ? body.email : '';
+      phoneNumber = typeof body?.phoneNumber === 'string' ? body.phoneNumber : '';
+      subject = typeof body?.subject === 'string' ? body.subject : '';
+      productCategory =
+        typeof body?.productCategory === 'string' ? body.productCategory : '';
+      message = typeof body?.message === 'string' ? body.message : '';
+      captchaToken = body?.captchaToken;
+      captchaAnswer = body?.captchaAnswer;
+      fileUrl =
+        typeof body?.fileUrl === 'string' && body.fileUrl.trim()
+          ? body.fileUrl.trim()
+          : null;
+    }
+
+    const trimmedMessage = message.trim();
 
     if (!trimmedMessage) {
       return NextResponse.json(
@@ -232,35 +349,89 @@ export async function POST(req: Request) {
       );
     }
 
+    const captchaResult = verifyCaptchaToken(captchaToken, captchaAnswer);
+    if (!captchaResult.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: captchaResult.error,
+          code: 'CAPTCHA_INVALID',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (uploadedFile) {
+      try {
+        fileUrl = await saveEnquiryAttachment(uploadedFile);
+      } catch (uploadError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              uploadError instanceof Error
+                ? uploadError.message
+                : 'Invalid uploaded file.',
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const enquiry = await prisma.enquiry.create({
       data: {
-        fullName,
-        companyName,
-        email,
-        phoneNumber,
-        subject,
-        productCategory,
+        fullName: fullName.trim(),
+        companyName: companyName.trim(),
+        email: email.trim(),
+        phoneNumber: phoneNumber.trim(),
+        subject: subject.trim(),
+        productCategory: productCategory.trim() || null,
         message: trimmedMessage,
+        fileUrl,
       },
     });
 
     // If the enquirer is not logged in, auto-create an account and email the
     // login credentials so they can track their enquiries.
     const currentUser = await getAuthUser(req);
-    if (!currentUser && typeof email === 'string' && email.trim()) {
-      await autoCreateAccountForEnquiry({ email, fullName });
+    const trimmedEmail = email.trim();
+    const baseUrl = resolveAppBaseUrl(req);
+    let createdNewAccount = false;
+    if (!currentUser && trimmedEmail) {
+      createdNewAccount = await autoCreateAccountForEnquiry({
+        email: trimmedEmail,
+        fullName: fullName.trim() || undefined,
+        baseUrl,
+      });
     }
 
-    const transporter = await createMailTransporter();
-    const from = await getMailFromAddress();
-    const adminEmail = await getAdminNotificationEmail();
+    try {
+      const smtpStatus = await getSmtpStatus();
+      if (smtpStatus.configured) {
+        const transporter = createTransporterFromConfig(smtpStatus.config);
+        const from = formatSmtpFromAddress(smtpStatus.config);
+        const adminEmail = smtpStatus.config.adminEmail;
+        const rawBrandName = smtpStatus.config.siteName?.trim() || 'Subra Scientific';
+        const safeBrandName = escapeEmailHtml(rawBrandName);
+        const safeSubject = escapeEmailHtml(String(subject || 'General Enquiry'));
+        const safeFullName = escapeEmailHtml(String(fullName || 'Customer'));
+        const safeCompanyName = escapeEmailHtml(String(companyName || '-'));
+        const safeEmail = escapeEmailHtml(trimmedEmail || '-');
+        const safePhone = escapeEmailHtml(String(phoneNumber || '-'));
+        const safeProductCategory = escapeEmailHtml(String(productCategory || '-'));
+        const safeMessage = escapeEmailHtml(trimmedMessage);
+        const fullAttachmentUrl = fileUrl
+          ? fileUrl.startsWith('http://') || fileUrl.startsWith('https://')
+            ? fileUrl
+            : `${baseUrl}${fileUrl}`
+          : '';
 
-    if (transporter && from && adminEmail) {
-      await transporter.sendMail({
-        from,
-        to: adminEmail,
-        subject: `New Enquiry - ${subject}`,
-        html: `
+        if (adminEmail) {
+          await transporter.sendMail({
+            from,
+            to: adminEmail,
+            subject: `New Enquiry - ${subject || 'General Enquiry'}`,
+            html: `
 <div style="background:#f4f7fb;padding:40px 20px;font-family:Arial,sans-serif;">
   <div style="max-width:650px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;">
 
@@ -270,36 +441,43 @@ export async function POST(req: Request) {
       </h1>
 
       <p style="color:#cbd5e1;margin-top:10px;font-size:14px;">
-        Patient Scientific Catalogue
+        ${safeBrandName}
       </p>
     </div>
 
     <div style="padding:30px;">
 
-      <p><b>Name:</b> ${fullName}</p>
-      <p><b>Company:</b> ${companyName}</p>
-      <p><b>Email:</b> ${email}</p>
-      <p><b>Phone:</b> ${phoneNumber}</p>
-      <p><b>Subject:</b> ${subject}</p>
-      <p><b>Product:</b> ${productCategory}</p>
+      <p><b>Name:</b> ${safeFullName}</p>
+      <p><b>Company:</b> ${safeCompanyName}</p>
+      <p><b>Email:</b> ${safeEmail}</p>
+      <p><b>Phone:</b> ${safePhone}</p>
+      <p><b>Subject:</b> ${safeSubject}</p>
+      <p><b>Product:</b> ${safeProductCategory}</p>
+      ${
+        fullAttachmentUrl
+          ? `<p><b>Attachment:</b> <a href="${escapeEmailHtml(fullAttachmentUrl)}">${escapeEmailHtml(fullAttachmentUrl)}</a></p>`
+          : ''
+      }
 
       <div style="margin-top:20px;padding:20px;background:#f8fafc;border-radius:12px;">
         <h3>Message</h3>
 
-        <p>${trimmedMessage}</p>
+        <p>${safeMessage}</p>
       </div>
     </div>
 
   </div>
 </div>
 `,
-      });
+          });
+        }
 
-      await transporter.sendMail({
-        from,
-        to: email,
-        subject: 'Your enquiry has been received',
-        html: `
+        if (trimmedEmail) {
+          await transporter.sendMail({
+            from,
+            to: trimmedEmail,
+            subject: 'Your enquiry has been received',
+            html: `
 <div style="background:#f4f7fb;padding:40px 20px;font-family:Arial,sans-serif;">
   <div style="max-width:650px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;">
 
@@ -315,16 +493,16 @@ export async function POST(req: Request) {
 
     <div style="padding:35px;">
 
-      <p>Hello <b>${fullName}</b>,</p>
+      <p>Hello <b>${safeFullName}</b>,</p>
 
       <p>
         Thank you for contacting
-        <b>Patient Scientific Catalogue</b>.
+        <b>${safeBrandName}</b>.
       </p>
 
       <p>
         We received your enquiry regarding
-        <b>${subject}</b>.
+        <b>${safeSubject}</b>.
       </p>
 
       <div style="margin:30px 0;padding:20px;border-radius:14px;background:#eff6ff;border:1px solid #bfdbfe;">
@@ -336,15 +514,26 @@ export async function POST(req: Request) {
       <p>Regards,</p>
 
       <p style="color:#2563eb;font-weight:bold;">
-        Patient Scientific Team
+        ${safeBrandName} Team
       </p>
     </div>
 
   </div>
 </div>
 `,
-      });
+          });
+        }
+      }
+    } catch (mailError) {
+      console.error('Failed to send enquiry notification emails:', mailError);
     }
+
+    emitRealtimeUpdate(
+      createdNewAccount
+        ? ['enquiries', 'users', 'dashboard']
+        : ['enquiries', 'dashboard'],
+      'enquiry-created'
+    );
 
     return NextResponse.json({
       success: true,
@@ -362,6 +551,61 @@ export async function POST(req: Request) {
       {
         status: 500,
       }
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  const auth = await requireAdmin(req);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const { searchParams } = new URL(req.url);
+    let rawId: unknown = searchParams.get('id');
+
+    if (!rawId) {
+      const body = await req.json().catch(() => null);
+      rawId = body?.id;
+    }
+
+    const enquiryId = parseEnquiryNumericId(rawId);
+    if (!enquiryId) {
+      return NextResponse.json(
+        { error: 'Valid enquiry ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.enquiry.findUnique({
+      where: { id: enquiryId },
+      select: { id: true, fileUrl: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Enquiry not found' },
+        { status: 404 }
+      );
+    }
+
+    await prisma.enquiry.delete({
+      where: { id: enquiryId },
+    });
+
+    await deleteStoredEnquiryFile(existing.fileUrl);
+
+    emitRealtimeUpdate(['enquiries', 'dashboard'], 'enquiry-deleted');
+
+    return NextResponse.json({
+      success: true,
+      message: 'Enquiry deleted successfully',
+      id: enquiryId,
+    });
+  } catch (error) {
+    console.error('Failed to delete enquiry:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete enquiry' },
+      { status: 500 }
     );
   }
 }

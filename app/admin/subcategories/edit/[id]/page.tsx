@@ -4,10 +4,13 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save } from 'lucide-react';
+import { toast } from 'sonner';
 import SimpleImageUpload from '@/components/admin/SimpleImageUpload';
 import { ToastContainer } from '@/components/Toast';
 import { useToast } from '@/lib/useToast';
 import LoadingState from '@/components/ui/LoadingState';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
+import { ROUTES } from '@/lib/routes';
 import {
   ADMIN_FORM_CARD_CLASS,
   ADMIN_FORM_INPUT_CLASS,
@@ -29,30 +32,27 @@ export default function SubcategoryEditPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
-  const { toasts, removeToast, showError, showSuccess } = useToast();
+  const { toasts, removeToast, showError } = useToast();
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [catRes] = await Promise.all([
-          fetch('/api/category', { cache: 'force-cache' }),
+        const [catRes, subRes] = await Promise.all([
+          fetch('/api/category', { cache: 'no-store' }),
+          id ? fetch(`/api/subcategory/${id}`, { cache: 'no-store' }) : Promise.resolve(null),
         ]);
 
         if (catRes.ok) {
           setCategories(await catRes.json());
         }
 
-        if (id) {
-          const res = await fetch(`/api/subcategory/${id}`, {
-            cache: 'no-store',
-          });
-
-          if (!res.ok) {
-            const body = await res.json();
+        if (subRes) {
+          if (!subRes.ok) {
+            const body = await subRes.json();
             throw new Error(body.error || 'Failed to load subcategory');
           }
 
-          const subcategory = await res.json();
+          const subcategory = await subRes.json();
           setName(subcategory.name || '');
           setDescription(subcategory.description || '');
           setCategoryId(String(subcategory.categoryId || ''));
@@ -105,8 +105,8 @@ export default function SubcategoryEditPage() {
         return;
       }
 
-      showSuccess('Subcategory updated successfully');
-      setTimeout(() => router.push('/admin/subcategories'), 1000);
+      toast.success('Subcategory updated successfully');
+      router.push(ROUTES.admin.subcategories);
     } catch (err: any) {
       showError(err.message || 'Something went wrong');
     } finally {
@@ -123,8 +123,8 @@ export default function SubcategoryEditPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6 text-foreground">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background py-3 text-foreground">
+      <div className={`${PAGE_CONTAINER_CLASS} space-y-6`}>
         <div className="flex items-center gap-3">
           <Link
             href="/admin/subcategories"

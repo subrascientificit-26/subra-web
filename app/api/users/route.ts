@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { validateEmail, validatePassword } from "@/lib/validators";
 import { sendUserAccountUpdateEmail } from "@/lib/mail";
+import { emitRealtimeUpdate } from "@/lib/realtime";
 
 const userSelect = {
   id: true,
@@ -63,6 +64,8 @@ export async function POST(req: Request) {
       },
       select: userSelect,
     });
+
+    emitRealtimeUpdate(["users", "dashboard"], "user-created");
 
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
@@ -153,6 +156,8 @@ export async function PUT(req: Request) {
       }
     }
 
+    emitRealtimeUpdate(["users", "dashboard"], "user-updated");
+
     return NextResponse.json(user);
   } catch (error) {
     return NextResponse.json(
@@ -178,6 +183,8 @@ export async function DELETE(req: Request) {
   }
 
   await prisma.user.delete({ where: { id } });
+
+  emitRealtimeUpdate(["users", "dashboard"], "user-deleted");
 
   return NextResponse.json({ message: "User deleted" });
 }

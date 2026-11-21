@@ -10,17 +10,34 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Mail, FileUp, Send, RotateCcw, Minus, Plus, Trash2 } from 'lucide-react';
+import {
+  Mail,
+  FileUp,
+  FileText,
+  Send,
+  RotateCcw,
+  Minus,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { RequiredMark } from '@/components/ui/FieldLabel';
 import LoadingState from '@/components/ui/LoadingState';
+import CaptchaField from '@/components/CaptchaField';
 import { ROUTES } from '@/lib/routes';
+import { useLiveUpdates } from '@/lib/hooks/useLiveUpdates';
 import { useCart, type CartItem } from '@/components/CartProvider';
 import { useEnquirySelection } from '@/components/EnquirySelectionProvider';
 import { resolveProductImageUrl } from '@/lib/productImageUrl';
+import { DEFAULT_PRODUCT_IMAGE } from '@/lib/products';
 import {
+  ENQUIRY_ALLOWED_FILE_ACCEPT,
+  formatEnquiryFileSize,
   getEnquiryFormDefaults,
   hasEnquiryProductPrefill,
+  isEnquiryImageUrl,
   parseEnquiryPrefillFromSearchParams,
+  validateEnquiryAttachmentFile,
   type EnquiryPrefillParams,
 } from '@/lib/enquiry';
 interface ProductOption {
@@ -71,8 +88,9 @@ function buildCartEnquiryMessage(
             item.price * item.quantity
           )})`
         : 'POV';
+    const codeText = item.productCode ? ` [${item.productCode}]` : '';
     const casText = item.casNo ? `, CAS No.: ${item.casNo}` : '';
-    return `${index + 1}. ${item.name} — Pack Size: ${item.packSize}, Qty: ${item.quantity}${casText} — ${priceText}`;
+    return `${index + 1}. ${item.name}${codeText} — Pack Size: ${item.packSize}, Qty: ${item.quantity}${casText} — ${priceText}`;
   });
 
   return [
@@ -99,6 +117,8 @@ export default function EnquiryForm() {
 function EnquiryFormContent() {
   const searchParams = useSearchParams();
   const productFieldRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewBlobUrlRef = useRef<string | null>(null);
   const appliedPrefillKeyRef = useRef<string | null>(null);
   const { items, subtotal, count, updateQuantity, removeItem } = useCart();
   const {
@@ -117,7 +137,13 @@ function EnquiryFormContent() {
     getEnquiryFormDefaults(searchParams)
   );
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [captchaError, setCaptchaError] = useState('');
+  const [captchaRefreshKey, setCaptchaRefreshKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -153,6 +179,7 @@ function EnquiryFormContent() {
 
     return {
       name: prefill.productName ?? '',
+      image: prefill.image ?? null,
       packSize: prefill.packSize || 'Standard',
       quantity: Number(prefill.quantity) || 1,
       price: Number(prefill.price) || 0,
@@ -188,8 +215,8 @@ function EnquiryFormContent() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    fetch('/api/products')
+  const loadProductOptions = () => {
+    fetch('/api/products', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data)) return;
@@ -201,7 +228,13 @@ function EnquiryFormContent() {
         );
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadProductOptions();
   }, []);
+
+  useLiveUpdates(['products'], loadProductOptions);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -239,11 +272,61 @@ function EnquiryFormContent() {
     }));
   };
 
+  useEffect(() => {
+    return () => {
+      if (previewBlobUrlRef.current) {
+        URL.revokeObjectURL(previewBlobUrlRef.current);
+        previewBlobUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const clearSelectedFile = () => {
+    if (previewBlobUrlRef.current) {
+      URL.revokeObjectURL(previewBlobUrlRef.current);
+      previewBlobUrlRef.current = null;
+    }
+    setSelectedFile(null);
+    setFileName(null);
+    setFilePreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    if (e.target.files && e.target.files[0]) {
-      setFileName(e.target.files[0].name);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validationError = validateEnquiryAttachmentFile(file);
+    if (validationError) {
+      setErrorMessage(validationError);
+      e.target.value = '';
+      return;
+    }
+
+    setErrorMessage('');
+
+    if (previewBlobUrlRef.current) {
+      URL.revokeObjectURL(previewBlobUrlRef.current);
+      previewBlobUrlRef.current = null;
+    }
+
+    setSelectedFile(file);
+    setFileName(file.name);
+
+    const isImage =
+      (file.type && file.type.startsWith('image/') && file.type !== 'image/svg+xml') ||
+      isEnquiryImageUrl(file.name);
+
+    if (isImage) {
+      const blobUrl = URL.createObjectURL(file);
+      previewBlobUrlRef.current = blobUrl;
+      setFilePreviewUrl(blobUrl);
+    } else {
+      setFilePreviewUrl(null);
     }
   };
 
@@ -251,9 +334,17 @@ function EnquiryFormContent() {
     e.preventDefault();
 
     const trimmedNotes = formData.message.trim();
+    setCaptchaError('');
 
     if (!hasProductContext && !trimmedNotes) {
       setErrorMessage('Please enter your message / requirements.');
+      return;
+    }
+
+    if (!captchaAnswer.trim()) {
+      const msg = 'Please enter the CAPTCHA code.';
+      setCaptchaError(msg);
+      setErrorMessage(msg);
       return;
     }
 
@@ -277,25 +368,35 @@ function EnquiryFormContent() {
 
       setErrorMessage('');
 
+      const payload = new FormData();
+      payload.append('fullName', formData.fullName);
+      payload.append('companyName', formData.companyName);
+      payload.append('email', formData.email);
+      payload.append('phoneNumber', formData.phoneNumber);
+      payload.append('subject', formData.subject);
+      payload.append('productCategory', formData.productCategory);
+      payload.append('message', finalMessage);
+      payload.append('captchaToken', captchaToken);
+      payload.append('captchaAnswer', captchaAnswer.trim());
+      if (selectedFile) {
+        payload.append('file', selectedFile);
+      }
+
       const response = await fetch('/api/enquiry', {
         method: 'POST',
-
-        headers: {
-          'Content-Type': 'application/json',
-        },
-
-        body: JSON.stringify({
-          ...formData,
-          message: finalMessage,
-        }),
+        body: payload,
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setErrorMessage(
-          data.message || 'Something went wrong'
-        );
+        const msg = data.message || data.error || 'Something went wrong';
+        if (data.code === 'CAPTCHA_INVALID') {
+          setCaptchaError(msg);
+        }
+        setCaptchaAnswer('');
+        setCaptchaRefreshKey((prev) => prev + 1);
+        setErrorMessage(msg);
 
         return;
       }
@@ -306,7 +407,7 @@ function EnquiryFormContent() {
         clearSelectedEnquiryItems();
       }
 
-      setFormData((prev) =>
+      setFormData(() =>
         applyProductPrefill({
           fullName: '',
           companyName: '',
@@ -318,10 +419,14 @@ function EnquiryFormContent() {
         })
       );
 
-      setFileName(null);
+      clearSelectedFile();
+      setCaptchaAnswer('');
+      setCaptchaRefreshKey((prev) => prev + 1);
     } catch (error) {
       console.log(error);
 
+      setCaptchaAnswer('');
+      setCaptchaRefreshKey((prev) => prev + 1);
       setErrorMessage('Failed to submit enquiry');
     } finally {
       setIsSubmitting(false);
@@ -329,7 +434,7 @@ function EnquiryFormContent() {
   };
 
   const handleReset = () => {
-    setFormData((prev) =>
+    setFormData(() =>
       applyProductPrefill({
         fullName: '',
         companyName: '',
@@ -341,7 +446,10 @@ function EnquiryFormContent() {
       })
     );
 
-    setFileName(null);
+    clearSelectedFile();
+    setCaptchaAnswer('');
+    setCaptchaError('');
+    setCaptchaRefreshKey((prev) => prev + 1);
 
     setSuccessMessage('');
 
@@ -375,14 +483,14 @@ function EnquiryFormContent() {
       >
         {/* SUCCESS MESSAGE */}
         {successMessage && (
-          <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-400">
+          <div className="rounded-xl border border-green-600/35 bg-green-500/10 px-4 py-3 text-sm text-green-700 theme-dark:text-green-400">
             {successMessage}
           </div>
         )}
 
         {/* ERROR MESSAGE */}
         {errorMessage && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          <div className="rounded-xl border border-red-600/35 bg-red-500/10 px-4 py-3 text-sm text-red-700 theme-dark:text-red-400">
             {errorMessage}
           </div>
         )}
@@ -400,8 +508,12 @@ function EnquiryFormContent() {
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface p-3">
               <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border border-border bg-surface-elevated">
                 <img
-                  src={resolveProductImageUrl(null)}
+                  src={resolveProductImageUrl(singleProduct.image)}
                   alt={singleProduct.name}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                  }}
                   className="h-full w-full object-contain p-1.5"
                 />
               </div>
@@ -448,41 +560,59 @@ function EnquiryFormContent() {
             </div>
 
             <div className="space-y-3">
-              {selectedEnquiryItems.map((item) => (
+              {selectedEnquiryItems.map((item) => {
+                const itemHref =
+                  item.href ||
+                  (item.source === 'external'
+                    ? ROUTES.externalProductDetail(item.id)
+                    : ROUTES.productDetail(item.id));
+                return (
                 <div
-                  key={`${item.id}-${item.packSize}`}
+                  key={`${item.source ?? 'product'}-${item.id}-${item.packSize}`}
                   className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface p-3"
                 >
                   <Link
-                    href={ROUTES.productDetail(item.id)}
+                    href={itemHref}
                     className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border border-border bg-surface-elevated"
                   >
                     <img
                       src={resolveProductImageUrl(item.image)}
                       alt={item.name}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                      }}
                       className="h-full w-full object-contain p-1.5"
                     />
                   </Link>
 
                   <div className="min-w-[8rem] flex-1">
                     <Link
-                      href={ROUTES.productDetail(item.id)}
+                      href={itemHref}
                       className="line-clamp-1 text-sm font-semibold text-foreground hover:text-primary"
                     >
                       {item.name}
                     </Link>
                     <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
+                      {item.productCode ? <span>Code: {item.productCode}</span> : null}
                       <span>Pack Size: {item.packSize}</span>
                       {item.casNo ? <span>CAS No.: {item.casNo}</span> : null}
                       {item.price > 0 ? <span>{formatPrice(item.price)} each</span> : null}
                     </div>
                   </div>
 
-                  <div className="ml-auto flex items-center gap-3">
+                  <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
                     <div className="flex items-center rounded-lg border border-border">
                       <button
                         type="button"
-                        onClick={() => updateSelectedEnquiryQuantity(item.id, item.packSize, item.quantity - 1)}
+                        onClick={() =>
+                          updateSelectedEnquiryQuantity(
+                            item.id,
+                            item.packSize,
+                            item.quantity - 1,
+                            item.source
+                          )
+                        }
                         className="flex h-8 w-8 items-center justify-center text-muted transition hover:text-foreground"
                         aria-label="Decrease quantity"
                       >
@@ -491,7 +621,14 @@ function EnquiryFormContent() {
                       <span className="w-9 text-center text-sm font-medium text-foreground">{item.quantity}</span>
                       <button
                         type="button"
-                        onClick={() => updateSelectedEnquiryQuantity(item.id, item.packSize, item.quantity + 1)}
+                        onClick={() =>
+                          updateSelectedEnquiryQuantity(
+                            item.id,
+                            item.packSize,
+                            item.quantity + 1,
+                            item.source
+                          )
+                        }
                         className="flex h-8 w-8 items-center justify-center text-muted transition hover:text-foreground"
                         aria-label="Increase quantity"
                       >
@@ -505,7 +642,9 @@ function EnquiryFormContent() {
                     ) : null}
                     <button
                       type="button"
-                      onClick={() => removeSelectedEnquiryItem(item.id, item.packSize)}
+                      onClick={() =>
+                        removeSelectedEnquiryItem(item.id, item.packSize, item.source)
+                      }
                       className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border text-muted transition hover:border-rose-500 hover:text-rose-500"
                       aria-label="Remove item"
                     >
@@ -513,7 +652,8 @@ function EnquiryFormContent() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
@@ -536,31 +676,42 @@ function EnquiryFormContent() {
             </div>
 
             <div className="space-y-3">
-              {items.map((item) => (
+              {items.map((item) => {
+                const itemHref =
+                  item.href ||
+                  (item.source === 'external'
+                    ? ROUTES.externalProductDetail(item.id)
+                    : ROUTES.productDetail(item.id));
+                return (
                 <div
-                  key={`${item.id}-${item.packSize}`}
+                  key={`${item.source ?? 'product'}-${item.id}-${item.packSize}`}
                   className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface p-3"
                 >
                   <Link
-                    href={ROUTES.productDetail(item.id)}
+                    href={itemHref}
                     className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border border-border bg-surface-elevated"
                   >
                     <img
                       src={resolveProductImageUrl(item.image)}
                       alt={item.name}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                      }}
                       className="h-full w-full object-contain p-1.5"
                     />
                   </Link>
 
                   <div className="min-w-[8rem] flex-1">
                     <Link
-                      href={ROUTES.productDetail(item.id)}
+                      href={itemHref}
                       className="line-clamp-1 text-sm font-semibold text-foreground hover:text-primary"
                     >
                       {item.name}
                     </Link>
 
                     <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
+                      {item.productCode ? <span>Code: {item.productCode}</span> : null}
                       <span>Pack Size: {item.packSize}</span>
                       {item.casNo ? <span>CAS No.: {item.casNo}</span> : null}
                       {item.price > 0 ? (
@@ -569,7 +720,7 @@ function EnquiryFormContent() {
                     </div>
                   </div>
 
-                  <div className="ml-auto flex items-center gap-3">
+                  <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
                     <div className="flex items-center rounded-lg border border-border">
                       <button
                         type="button"
@@ -577,7 +728,8 @@ function EnquiryFormContent() {
                           updateQuantity(
                             item.id,
                             item.packSize,
-                            item.quantity - 1
+                            item.quantity - 1,
+                            item.source
                           )
                         }
                         className="flex h-8 w-8 items-center justify-center text-muted transition hover:text-foreground"
@@ -596,7 +748,8 @@ function EnquiryFormContent() {
                           updateQuantity(
                             item.id,
                             item.packSize,
-                            item.quantity + 1
+                            item.quantity + 1,
+                            item.source
                           )
                         }
                         className="flex h-8 w-8 items-center justify-center text-muted transition hover:text-foreground"
@@ -616,7 +769,7 @@ function EnquiryFormContent() {
 
                     <button
                       type="button"
-                      onClick={() => removeItem(item.id, item.packSize)}
+                      onClick={() => removeItem(item.id, item.packSize, item.source)}
                       className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border text-muted transition hover:border-rose-500 hover:text-rose-500"
                       aria-label="Remove item"
                     >
@@ -624,7 +777,8 @@ function EnquiryFormContent() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
@@ -703,7 +857,7 @@ function EnquiryFormContent() {
             </label>
 
             <div className="flex gap-2">
-              <select className="bg-surface-elevated text-foreground text-sm outline-none py-2 px-2 rounded-lg border border-border">
+              <select className="shrink-0 bg-surface-elevated text-foreground text-xs sm:text-sm outline-none py-2 px-2 rounded-lg border border-border">
                 <option value="+91">🇮🇳 (+91)</option>
                 <option value="+1">🇺🇸 (+1)</option>
                 <option value="+44">🇬🇧 (+44)</option>
@@ -715,7 +869,7 @@ function EnquiryFormContent() {
                 onChange={handleInputChange}
                 placeholder="Enter phone number"
                 required
-                className={`${inputClass} flex-1`}
+                className={`${inputClass} min-w-0 flex-1`}
               />
             </div>
           </div>
@@ -845,28 +999,81 @@ function EnquiryFormContent() {
         <div>
           <label className={`flex items-center gap-2 ${labelClass}`}>
             <FileUp size={16} />
-            Upload File (Optional)
+            Upload Image / Supporting File (Optional)
           </label>
 
           <label className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface-elevated border border-border cursor-pointer hover:border-primary transition">
             <span className="text-sm text-muted truncate">
               {fileName
                 ? fileName
-                : 'Upload SDS, specifications or any supporting file'}
+                : 'Upload image, SDS, specifications or supporting file'}
             </span>
 
             <span className="text-sm text-primary font-medium whitespace-nowrap">
-              Choose File
+              {selectedFile ? 'Change File' : 'Choose File'}
             </span>
 
             <input
+              ref={fileInputRef}
               type="file"
               className="hidden"
               onChange={handleFileChange}
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+              accept={ENQUIRY_ALLOWED_FILE_ACCEPT}
             />
           </label>
+
+          {selectedFile && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-elevated p-3">
+              <div className="flex min-w-0 items-center gap-3">
+                {filePreviewUrl ? (
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border bg-surface">
+                    <img
+                      src={filePreviewUrl}
+                      alt={fileName || 'Uploaded enquiry image'}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-primary">
+                    <FileText size={20} />
+                  </div>
+                )}
+
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {fileName}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {formatEnquiryFileSize(selectedFile.size)}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={clearSelectedFile}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted transition hover:border-rose-500 hover:text-rose-500"
+                aria-label="Remove uploaded file"
+                title="Remove uploaded file"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* CAPTCHA */}
+        <CaptchaField
+          value={captchaAnswer}
+          onChange={(val) => {
+            setCaptchaAnswer(val);
+            if (captchaError) setCaptchaError('');
+          }}
+          onTokenChange={setCaptchaToken}
+          refreshTrigger={captchaRefreshKey}
+          error={captchaError}
+          disabled={isSubmitting}
+        />
 
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 pt-2">

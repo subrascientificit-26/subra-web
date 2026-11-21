@@ -26,7 +26,7 @@ export default function BackButton() {
   return (
     <button
       onClick={handleBack}
-      className="rounded-md bg-black px-4 py-2 text-white"
+      className="rounded-md bg-primary hover:bg-primary-hover px-4 py-2 text-white transition"
       aria-label="Go back to previous page"
     >
       Previous

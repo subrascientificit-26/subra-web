@@ -46,7 +46,7 @@ export default function AdminListLayout({
               <button
                 type="button"
                 onClick={onCreateClick}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-hover"
               >
                 <Plus size={16} />
                 {createButtonLabel}
@@ -56,12 +56,12 @@ export default function AdminListLayout({
         )}
 
         {error && (
-          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">
+          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/40 rounded-lg text-red-700 theme-dark:text-red-400">
             {error}
           </div>
         )}
         {success && (
-          <div className="mb-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400">
+          <div className="mb-4 p-4 bg-green-500/10 border border-green-500/40 rounded-lg text-green-700 theme-dark:text-green-400">
             {success}
           </div>
         )}

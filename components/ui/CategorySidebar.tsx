@@ -53,8 +53,8 @@ export default function CategorySidebar({
   const isAllSelected = selectedCategory === allLabel && !selectedSubCategory;
 
   return (
-    <aside className={`flex w-full flex-shrink-0 flex-col space-y-5 md:w-56 lg:w-64 ${STICKY_SIDEBAR_CLASS}`}>
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
+    <aside className={`flex w-full flex-shrink-0 flex-col space-y-5 lg:w-64 ${STICKY_SIDEBAR_CLASS}`}>
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm theme-dark:shadow-lg">
         <div className="border-b border-border px-4 py-4">
           <h3 className="text-sm font-bold uppercase tracking-wide text-primary lg:text-base">
             {title}
@@ -138,7 +138,7 @@ export default function CategorySidebar({
       </div>
 
       {showDynamicLinks && dynamicLinks.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
+        <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm theme-dark:shadow-lg">
           <div className="border-b border-border px-4 py-4">
             <h3 className="text-sm font-bold uppercase tracking-wide text-primary lg:text-base">
               Quick Links
@@ -160,7 +160,7 @@ export default function CategorySidebar({
       )}
 
       {showSupport && (
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-lg">
+        <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm theme-dark:shadow-lg">
           <p className="mb-3 text-sm font-bold text-foreground">Need Assistance?</p>
           <p className="mb-4 text-sm leading-6 text-muted">
             Contact our support team for product inquiries, quotations and technical help.

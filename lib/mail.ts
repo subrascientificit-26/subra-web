@@ -1,35 +1,88 @@
-import { createMailTransporter, getMailFromAddress } from "@/lib/smtp";
+import {
+  createTransporterFromConfig,
+  formatRejectedRecipients,
+  formatSmtpFromAddress,
+  getSmtpStatus,
+  resolveAppBaseUrl,
+} from "@/lib/smtp";
+
+export function escapeEmailHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 async function sendMail(options: {
   to: string;
   subject: string;
   html: string;
+  text?: string;
 }) {
-  const transporter = await createMailTransporter();
-  const from = await getMailFromAddress();
-
-  if (!transporter || !from) {
-    console.warn("Email not sent: SMTP is not configured");
-    return;
+  const status = await getSmtpStatus();
+  if (!status.configured) {
+    throw new Error(status.reason);
   }
 
-  await transporter.sendMail({
+  const transporter = createTransporterFromConfig(status.config);
+  const from = formatSmtpFromAddress(status.config);
+
+  const info = await transporter.sendMail({
     from,
     to: options.to,
     subject: options.subject,
+    text: options.text ?? htmlToPlainText(options.html),
     html: options.html,
   });
+
+  const rejectedList = formatRejectedRecipients(info.rejected);
+  if (rejectedList) {
+    throw new Error(`SMTP server rejected recipient(s): ${rejectedList}`);
+  }
+
+  console.info("[SMTP] Email accepted by server", {
+    source: status.source,
+    from,
+    to: options.to,
+    subject: options.subject,
+    messageId: info.messageId,
+    accepted: info.accepted,
+    response: info.response,
+  });
+
+  return info;
+}
+
+async function getBrandName(): Promise<string> {
+  const status = await getSmtpStatus();
+  if (status.configured && status.config.siteName) {
+    return status.config.siteName;
+  }
+  return "Subra Scientific";
 }
 
 // VERIFY EMAIL
 export async function sendVerificationEmail(
   email: string,
-  token: string
+  token: string,
+  baseUrl?: string
 ) {
   const currentYear = new Date().getFullYear();
+  const rawBrandName = await getBrandName();
+  const brandName = escapeEmailHtml(rawBrandName);
+  const resolvedBaseUrl = (baseUrl || resolveAppBaseUrl()).replace(/\/+$/, "");
 
-  const verificationLink =
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/verify-email?token=${token}`;
+  const verificationLink = `${resolvedBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -119,14 +172,14 @@ export async function sendVerificationEmail(
         <div class="container">
 
           <div class="header">
-            <h1>Patient</h1>
+            <h1>${brandName}</h1>
             <p style="margin: 5px 0; font-size: 14px;">
               Email Verification
             </p>
           </div>
 
           <div class="content">
-            <h2>Welcome to Patient!</h2>
+            <h2>Welcome to ${brandName}!</h2>
 
             <p>
               Thank you for registering with us. To complete your account setup,
@@ -166,8 +219,7 @@ export async function sendVerificationEmail(
           </div>
 
           <div class="footer">
-            <p>© ${currentYear} Patient Scientific. All rights reserved.</p>
-            <p>www.Patientscientific.com</p>
+            <p>&copy; ${currentYear} ${brandName}. All rights reserved.</p>
           </div>
 
         </div>
@@ -175,9 +227,18 @@ export async function sendVerificationEmail(
     </html>
   `;
 
-  await sendMail({
+  return sendMail({
     to: email,
-    subject: "Verify Your Email - Patient Scientific",
+    subject: `Verify Your Email - ${rawBrandName}`,
+    text: [
+      `Welcome to ${rawBrandName}!`,
+      "",
+      "Please verify your email address by opening the link below:",
+      verificationLink,
+      "",
+      "This verification link expires in 24 hours.",
+      "If you did not create this account, you can ignore this email.",
+    ].join("\n"),
     html: htmlContent,
   });
 }
@@ -185,12 +246,15 @@ export async function sendVerificationEmail(
 // RESET PASSWORD EMAIL
 export async function sendResetPasswordEmail(
   email: string,
-  token: string
+  token: string,
+  baseUrl?: string
 ) {
   const currentYear = new Date().getFullYear();
+  const rawBrandName = await getBrandName();
+  const brandName = escapeEmailHtml(rawBrandName);
+  const resolvedBaseUrl = (baseUrl || resolveAppBaseUrl()).replace(/\/+$/, "");
 
-  const resetLink =
-    `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`;
+  const resetLink = `${resolvedBaseUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -290,7 +354,7 @@ export async function sendResetPasswordEmail(
         <div class="container">
 
           <div class="header">
-            <h1>Patient</h1>
+            <h1>${brandName}</h1>
 
             <p style="margin: 5px 0; font-size: 14px;">
               Password Reset Request
@@ -331,12 +395,12 @@ export async function sendResetPasswordEmail(
             </p>
 
             <div class="expiry">
-              <strong>⏰ Link Expires:</strong>
+              <strong>Link Expires:</strong>
               This reset link will expire in 1 hour for security reasons.
             </div>
 
             <div class="security-note">
-              <strong>⚠️ Security Alert:</strong>
+              <strong>Security Alert:</strong>
               If you did not request a password reset, please ignore this email.
               Your password will remain unchanged.
               Do not share this link with anyone.
@@ -344,8 +408,7 @@ export async function sendResetPasswordEmail(
           </div>
 
           <div class="footer">
-            <p>© ${currentYear} Patient Scientific. All rights reserved.</p>
-            <p>www.Patientscientific.com</p>
+            <p>&copy; ${currentYear} ${brandName}. All rights reserved.</p>
           </div>
 
         </div>
@@ -353,9 +416,15 @@ export async function sendResetPasswordEmail(
     </html>
   `;
 
-  await sendMail({
+  return sendMail({
     to: email,
-    subject: "Reset Your Password - Patient Scientific",
+    subject: `Reset Your Password - ${rawBrandName}`,
+    text: [
+      `Reset your ${rawBrandName} password using the link below (valid for 1 hour):`,
+      resetLink,
+      "",
+      "If you did not request a password reset, please ignore this email.",
+    ].join("\n"),
     html: htmlContent,
   });
 }
@@ -365,10 +434,14 @@ export async function sendNewAccountCredentialsEmail(options: {
   email: string;
   name: string | null;
   password: string;
+  baseUrl?: string;
 }) {
   const currentYear = new Date().getFullYear();
-  const displayName = options.name?.trim() || "there";
-  const loginLink = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/login`;
+  const rawBrandName = await getBrandName();
+  const brandName = escapeEmailHtml(rawBrandName);
+  const displayName = escapeEmailHtml(options.name?.trim() || "there");
+  const resolvedBaseUrl = (options.baseUrl || resolveAppBaseUrl()).replace(/\/+$/, "");
+  const loginLink = `${resolvedBaseUrl}/login`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -452,20 +525,20 @@ export async function sendNewAccountCredentialsEmail(options: {
       <body>
         <div class="container">
           <div class="header">
-            <h1>Patient</h1>
+            <h1>${brandName}</h1>
             <p style="margin: 5px 0; font-size: 14px;">Your Account Is Ready</p>
           </div>
           <div class="content">
             <h2>Welcome, ${displayName}!</h2>
             <p>
               Thank you for your enquiry with
-              <strong>Patient Scientific Catalogue</strong>. We have created an
+              <strong>${brandName}</strong>. We have created an
               account for you so you can track your enquiries and orders.
             </p>
 
             <div class="credentials">
-              <p><strong>Email:</strong> <code>${options.email}</code></p>
-              <p><strong>Temporary Password:</strong> <code>${options.password}</code></p>
+              <p><strong>Email:</strong> <code>${escapeEmailHtml(options.email)}</code></p>
+              <p><strong>Temporary Password:</strong> <code>${escapeEmailHtml(options.password)}</code></p>
             </div>
 
             <div style="text-align: center;">
@@ -481,17 +554,25 @@ export async function sendNewAccountCredentialsEmail(options: {
             </div>
           </div>
           <div class="footer">
-            <p>© ${currentYear} Patient Scientific. All rights reserved.</p>
-            <p>www.Patientscientific.com</p>
+            <p>&copy; ${currentYear} ${brandName}. All rights reserved.</p>
           </div>
         </div>
       </body>
     </html>
   `;
 
-  await sendMail({
+  return sendMail({
     to: options.email,
-    subject: "Your Account Details - Patient Scientific",
+    subject: `Your Account Details - ${rawBrandName}`,
+    text: [
+      `Welcome ${options.name?.trim() || "there"} to ${rawBrandName}!`,
+      "",
+      `Login URL: ${loginLink}`,
+      `Email: ${options.email}`,
+      `Temporary Password: ${options.password}`,
+      "",
+      "Please log in and change your password right away.",
+    ].join("\n"),
     html: htmlContent,
   });
 }
@@ -508,13 +589,15 @@ export async function sendUserAccountUpdateEmail(options: {
   };
 }) {
   const currentYear = new Date().getFullYear();
-  const displayName = options.name?.trim() || "there";
+  const rawBrandName = await getBrandName();
+  const brandName = escapeEmailHtml(rawBrandName);
+  const displayName = escapeEmailHtml(options.name?.trim() || "there");
   const roleLabel = options.role === "admin" ? "Admin" : "User";
   const changeLines: string[] = [];
 
   if (options.changes.emailChanged && options.changes.previousEmail) {
     changeLines.push(
-      `<li>Email updated from <strong>${options.changes.previousEmail}</strong> to <strong>${options.email}</strong></li>`
+      `<li>Email updated from <strong>${escapeEmailHtml(options.changes.previousEmail)}</strong> to <strong>${escapeEmailHtml(options.email)}</strong></li>`
     );
   }
 
@@ -571,27 +654,34 @@ export async function sendUserAccountUpdateEmail(options: {
       <body>
         <div class="container">
           <div class="header">
-            <h1>Patient</h1>
+            <h1>${brandName}</h1>
             <p style="margin: 5px 0; font-size: 14px;">Account Update</p>
           </div>
           <div class="content">
             <h2>Hello ${displayName},</h2>
             <p>Your account details were updated by an administrator.</p>
             <ul>${changeLines.join("")}</ul>
-            <p>Your current role is <strong>${roleLabel}</strong> and your login email is <strong>${options.email}</strong>.</p>
+            <p>Your current role is <strong>${roleLabel}</strong> and your login email is <strong>${escapeEmailHtml(options.email)}</strong>.</p>
             <p>If you did not expect this change, please contact support.</p>
           </div>
           <div class="footer">
-            <p>© ${currentYear} Patient Scientific. All rights reserved.</p>
+            <p>&copy; ${currentYear} ${brandName}. All rights reserved.</p>
           </div>
         </div>
       </body>
     </html>
   `;
 
-  await sendMail({
+  return sendMail({
     to: options.email,
-    subject: "Your Account Has Been Updated - Patient Scientific",
+    subject: `Your Account Has Been Updated - ${rawBrandName}`,
+    text: [
+      `Hello ${options.name?.trim() || "there"},`,
+      "",
+      `Your ${rawBrandName} account details were updated by an administrator.`,
+      `Role: ${roleLabel}`,
+      `Login Email: ${options.email}`,
+    ].join("\n"),
     html: htmlContent,
   });
 }

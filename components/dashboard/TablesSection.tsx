@@ -1,46 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { MessageSquareText } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { ROUTES } from '@/lib/routes';
 import LoadingState from '@/components/ui/LoadingState';
-
-interface RecentEnquiry {
-  id: string;
-  title: string;
-  name: string;
-  email: string;
-  date: string;
-}
-
-interface ProductDetails {
-  total: number;
-  featured: number;
-  bestSeller: number;
-  inStock: number;
-  outOfStock: number;
-  lowStock: number;
-}
+import { isEnquiryImageUrl } from '@/lib/enquiry';
+import { DEFAULT_PRODUCT_IMAGE } from '@/lib/products';
+import { resolveProductImageUrl } from '@/lib/productImageUrl';
+import { useAdminDashboard } from '@/lib/hooks/useAdminDashboard';
 
 export default function TablesSection() {
-  const [recentEnquiries, setRecentEnquiries] = useState<RecentEnquiry[]>([]);
-  const [productDetails, setProductDetails] = useState<ProductDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/api/admin/dashboard', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setRecentEnquiries(data?.recentEnquiries ?? []);
-        setProductDetails(data?.productDetails ?? null);
-      })
-      .catch(() => {
-        setRecentEnquiries([]);
-        setProductDetails(null);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, loading } = useAdminDashboard();
+  const recentEnquiries = data?.recentEnquiries ?? [];
+  const productDetails = data?.productDetails ?? null;
 
   if (loading) {
     return <LoadingState message="Loading dashboard details..." />;
@@ -58,7 +30,7 @@ export default function TablesSection() {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
-      <div className="bg-surface border border-border rounded-xl p-4">
+      <div className="min-w-0 bg-surface border border-border rounded-xl p-4">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-semibold text-foreground">Recent Enquiries</h2>
           <Link href={ROUTES.admin.enquiry} className="text-xs text-primary hover:underline">
@@ -76,9 +48,37 @@ export default function TablesSection() {
                 className="rounded-xl border border-border bg-surface-elevated px-4 py-3 transition hover:border-primary/40"
               >
                 <div className="flex gap-3">
-                  {/* <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
-                    <MessageSquareText size={18} className="text-primary" />
-                  </div> */}
+                  {enquiry.fileUrl ? (
+                    isEnquiryImageUrl(enquiry.fileUrl) ? (
+                      <a
+                        href={resolveProductImageUrl(enquiry.fileUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg border border-border bg-surface"
+                        title="Open uploaded image"
+                      >
+                        <img
+                          src={resolveProductImageUrl(enquiry.fileUrl)}
+                          alt={enquiry.title || enquiry.name}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                          }}
+                          className="h-full w-full object-cover"
+                        />
+                      </a>
+                    ) : (
+                      <a
+                        href={resolveProductImageUrl(enquiry.fileUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary"
+                        title="Open attachment"
+                      >
+                        <FileText size={16} />
+                      </a>
+                    )
+                  ) : null}
 
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-start justify-between gap-2">
@@ -106,7 +106,7 @@ export default function TablesSection() {
         )}
       </div>
 
-      <div className="bg-surface border border-border rounded-xl p-4">
+      <div className="min-w-0 bg-surface border border-border rounded-xl p-4">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-semibold text-foreground">Product Details</h2>
           <Link href={ROUTES.admin.products} className="text-xs text-primary hover:underline">
@@ -117,7 +117,7 @@ export default function TablesSection() {
         {productRows.length === 0 ? (
           <p className="text-sm text-muted">No product data available</p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-3 2xl:grid-cols-5">
             {productRows.map((row) => (
               <div
                 key={row.label}

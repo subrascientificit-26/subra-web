@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   Globe,
 } from 'lucide-react';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 
 export default function CustomProductFeatures() {
   const features = [
@@ -36,11 +37,11 @@ export default function CustomProductFeatures() {
   ];
 
   return (
-    <div className="w-full bg-background text-foreground py-1 px-4 md:px-8">
+    <div className="w-full bg-background text-foreground py-2">
 
-      <div className="mx-auto max-w-[1650px]">
+      <div className={PAGE_CONTAINER_CLASS}>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4 mb-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
 
           {features.map((feature, index) => {
             const Icon = feature.icon;
@@ -51,7 +52,7 @@ export default function CustomProductFeatures() {
                 className="flex items-start gap-4 rounded-xl border border-border bg-surface p-5 transition-all duration-300 hover:border-primary"
               >
 
-                <div className="flex h-13 w-15 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
 
                   <Icon className="h-5 w-5 text-primary" />
 

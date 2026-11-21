@@ -33,6 +33,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { ToastContainer } from "@/components/Toast";
 
 import { useToast } from "@/lib/useToast";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 
 
 
@@ -90,13 +91,13 @@ export default function AdminUsersPage() {
 
 
 
-  const loadUsers = async () => {
+  const loadUsers = async (showLoader = true) => {
 
-    setLoading(true);
+    if (showLoader) setLoading(true);
 
     try {
 
-      const res = await fetch("/api/users");
+      const res = await fetch("/api/users", { cache: "no-store" });
 
       const data = await res.json();
 
@@ -106,13 +107,14 @@ export default function AdminUsersPage() {
 
     } catch (error) {
 
-      showError(error instanceof Error ? error.message : "Failed to load users");
-
-      setUsers([]);
+      if (showLoader) {
+        showError(error instanceof Error ? error.message : "Failed to load users");
+        setUsers([]);
+      }
 
     } finally {
 
-      setLoading(false);
+      if (showLoader) setLoading(false);
 
     }
 
@@ -122,9 +124,13 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
 
-    loadUsers();
+    loadUsers(true);
 
   }, []);
+
+  useLiveUpdates(["users"], () => {
+    void loadUsers(false);
+  });
 
 
 

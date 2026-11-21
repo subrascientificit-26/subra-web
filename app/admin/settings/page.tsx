@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { CreditCard, LayoutGrid, Mail, Moon, Palette, Settings, Share2, Sun, User } from "lucide-react";
 import AdminListLayout from "@/components/admin/AdminListLayout";
 import ProfileImageCrop from "@/components/admin/ProfileImageCrop";
@@ -43,6 +43,7 @@ import WidgetCardEditor from "@/components/admin/WidgetCardEditor";
 import SocialLinkEditor from "@/components/admin/SocialLinkEditor";
 import type { WidgetCard } from "@/lib/widgetCards";
 import type { SocialLink } from "@/lib/socialLinks";
+import { validateEmail } from "@/lib/validators";
 import {
   DEFAULT_HERO_CARDS,
   DEFAULT_SERVICE_CARDS,
@@ -123,7 +124,7 @@ function AdminThemeToggle({
           Dark
         </button>
       </div>
-      {error ? <p className="mt-1.5 text-[11px] font-medium text-red-400">{error}</p> : null}
+      {error ? <p className="mt-1.5 text-[11px] font-medium text-red-600 theme-dark:text-red-400">{error}</p> : null}
     </div>
   );
 }
@@ -156,19 +157,46 @@ function AdminColorInput({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="#0b5cff"
-          className={`flex-1 rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary ${error ? "border-red-500/50 focus:border-red-500" : ""
+          className={`min-w-0 flex-1 rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary ${error ? "border-red-500 focus:border-red-500" : ""
             }`}
         />
       </div>
-      {error ? <p className="mt-1.5 text-[11px] font-medium text-red-400">{error}</p> : null}
+      {error ? <p className="mt-1.5 text-[11px] font-medium text-red-600 theme-dark:text-red-400">{error}</p> : null}
     </div>
   );
 }
 
+const emptySubscribe = () => () => {};
+
 export default function AdminSettingsPage() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const urlSearch = useSyncExternalStore(
+    emptySubscribe,
+    () => window.location.search,
+    () => ""
+  );
+  const [selectedTab, setSelectedTab] = useState<SettingsTab | null>(null);
+  const tabParam = new URLSearchParams(urlSearch).get("tab");
+  const urlTab: SettingsTab =
+    tabParam === "profile" ||
+    tabParam === "payment" ||
+    tabParam === "general" ||
+    tabParam === "smtp" ||
+    tabParam === "widget" ||
+    tabParam === "social"
+      ? tabParam
+      : "general";
+  const activeTab = selectedTab ?? urlTab;
+  const setActiveTab = setSelectedTab;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState("");
+  const [smtpTestStatus, setSmtpTestStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+    detail?: string;
+  } | null>(null);
+  const [smtpExplicitlyDisabled, setSmtpExplicitlyDisabled] = useState(false);
   const [profile, setProfile] = useState(emptyProfile);
   const [payment, setPayment] = useState(emptyPayment);
   const [smtp, setSmtp] = useState(emptySmtp);
@@ -235,13 +263,6 @@ export default function AdminSettingsPage() {
   };
 
   useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get("tab");
-    if (tab === "profile" || tab === "payment" || tab === "general" || tab === "smtp" || tab === "widget" || tab === "social") {
-      setActiveTab(tab);
-    }
-  }, []);
-
-  useEffect(() => {
     const handleThemeChange = (event: Event) => {
       const detail = (event as CustomEvent<ThemeMode>).detail;
       if (detail === "light" || detail === "dark") {
@@ -297,6 +318,7 @@ export default function AdminSettingsPage() {
           role: profileData.role ?? "",
           profile: profileData.profile ?? "",
         }));
+        setSmtpTestEmail((prev) => prev || profileData.email || "");
 
         setPayment({
           ...emptyPayment,
@@ -305,13 +327,20 @@ export default function AdminSettingsPage() {
             settingsData[SETTING_KEYS.razorpayEnabled] === "true" ? "true" : "false",
         });
 
+        const hasSavedSmtpCreds = Boolean(
+          settingsData[SETTING_KEYS.smtpHost]?.trim() ||
+            settingsData[SETTING_KEYS.smtpUser]?.trim() ||
+            settingsData[SETTING_KEYS.smtpPass]?.trim()
+        );
+        const loadedSmtpEnabled = settingsData[SETTING_KEYS.smtpEnabled] === "true";
+        setSmtpExplicitlyDisabled(!loadedSmtpEnabled && hasSavedSmtpCreds);
+
         setSmtp({
           ...emptySmtp,
           ...pickSettings(settingsData, SMTP_SETTING_KEYS),
           [SETTING_KEYS.smtpSecure]:
             settingsData[SETTING_KEYS.smtpSecure] === "true" ? "true" : "false",
-          [SETTING_KEYS.smtpEnabled]:
-            settingsData[SETTING_KEYS.smtpEnabled] === "true" ? "true" : "false",
+          [SETTING_KEYS.smtpEnabled]: loadedSmtpEnabled ? "true" : "false",
         });
 
         setWidget({
@@ -339,6 +368,29 @@ export default function AdminSettingsPage() {
           [SETTING_KEYS.themeMode]:
             settingsData[SETTING_KEYS.themeMode] === "light" ? "light" : "dark",
         });
+
+        if (settingsData[SETTING_KEYS.businessHours]) {
+          try {
+            const parsedHours = JSON.parse(settingsData[SETTING_KEYS.businessHours]);
+            if (Array.isArray(parsedHours)) {
+              setBusinessHours(
+                DAYS.map((day) => {
+                  const found = parsedHours.find(
+                    (entry: { day?: string; open?: string; close?: string }) =>
+                      entry?.day === day
+                  );
+                  return {
+                    day,
+                    open: typeof found?.open === "string" ? found.open : "",
+                    close: typeof found?.close === "string" ? found.close : "",
+                  };
+                })
+              );
+            }
+          } catch {
+            // Keep default empty business hours if stored JSON is invalid
+          }
+        }
 
         const serverTheme =
           settingsData[SETTING_KEYS.themeMode] === "light" ? "light" : "dark";
@@ -640,6 +692,84 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const updateSmtpField = (key: string, value: string) => {
+    setSmtp((prev) => {
+      const next = { ...prev, [key]: value };
+      if (
+        !smtpExplicitlyDisabled &&
+        prev[SETTING_KEYS.smtpEnabled] !== "true" &&
+        value.trim()
+      ) {
+        next[SETTING_KEYS.smtpEnabled] = "true";
+      }
+      return next;
+    });
+    if (smtpErrors[key]) {
+      setSmtpErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    setSmtpErrors({});
+    setSmtpTestStatus(null);
+
+    const validation = validateSmtpSettings({
+      ...smtp,
+      [SETTING_KEYS.smtpEnabled]: "true",
+    });
+    if (!validation.valid) {
+      setSmtpErrors(validation.errors);
+      showError("Please complete the highlighted SMTP fields before testing");
+      return;
+    }
+
+    setTestingSmtp(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toEmail: smtpTestEmail.trim(),
+          settings: smtp,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.errors && Object.keys(data.errors).length > 0) {
+          setSmtpErrors(data.errors);
+        }
+        const message = data.error || "Failed to send test email";
+        setSmtpTestStatus({ type: "error", text: message });
+        showError(message);
+        return;
+      }
+
+      const message = data.message || "Test email sent successfully";
+      setSmtpTestStatus({
+        type: "success",
+        text: message,
+        detail: data.smtpResponse,
+      });
+      showSuccess(message);
+      if (data.warning) {
+        showError(data.warning);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to send test email";
+      setSmtpTestStatus({ type: "error", text: message });
+      showError(message);
+    } finally {
+      setTestingSmtp(false);
+    }
+  };
+
   const saveWidget = async (event: React.FormEvent) => {
     event.preventDefault();
     setWidgetErrors({});
@@ -746,9 +876,9 @@ export default function AdminSettingsPage() {
     >
       <ToastContainer toasts={toasts} onClose={removeToast} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-border bg-surface p-2 h-fit">
-          <nav className="space-y-1">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="rounded-2xl border border-border bg-surface p-2 h-fit shadow-sm min-w-0">
+          <nav className="flex flex-row gap-1 overflow-x-auto scrollbar-none lg:flex-col lg:gap-0 lg:space-y-1 lg:overflow-visible">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
@@ -757,7 +887,7 @@ export default function AdminSettingsPage() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${active
+                  className={`flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-sm font-medium transition lg:w-full lg:gap-3 lg:px-4 lg:py-3 ${active
                       ? "bg-primary text-white"
                       : "text-muted hover:bg-surface-elevated hover:text-foreground"
                     }`}
@@ -770,11 +900,11 @@ export default function AdminSettingsPage() {
           </nav>
         </aside>
 
-        <section className="rounded-2xl border border-border bg-surface p-6">
+        <section className="min-w-0 rounded-2xl border border-border bg-surface p-4 sm:p-6 shadow-sm">
           {loading ? (
             <p className="text-sm text-muted">Loading settings...</p>
           ) : activeTab === "general" ? (
-            <form onSubmit={saveGeneral} className="space-y-6 max-w-4xl">
+            <form onSubmit={saveGeneral} className="space-y-6 w-full">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">General</h2>
                 <p className="mt-1 text-sm text-muted">
@@ -872,19 +1002,25 @@ export default function AdminSettingsPage() {
                 {businessHours.map((item, index) => (
                   <div
                     key={item.day}
-                    className="grid grid-cols-3 gap-4 items-center"
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4 sm:items-center"
                   >
                     <p className="text-sm font-medium">{item.day}</p>
 
                     <AdminInput
                       type="time"
+                      aria-label={`${item.day} opening time`}
                       value={item.open}
-                      onChange={(e) => updateBusinessHour(index, "open", e.target.value)} label={""} />
+                      onChange={(e) => updateBusinessHour(index, "open", e.target.value)}
+                      label=""
+                    />
 
                     <AdminInput
                       type="time"
+                      aria-label={`${item.day} closing time`}
                       value={item.close}
-                      onChange={(e) => updateBusinessHour(index, "close", e.target.value)} label={""} />
+                      onChange={(e) => updateBusinessHour(index, "close", e.target.value)}
+                      label=""
+                    />
                   </div>
                 ))}
               </div>
@@ -928,7 +1064,7 @@ export default function AdminSettingsPage() {
               <AdminFormActions submitLabel="Save General Settings" saving={saving} />
             </form>
           ) : activeTab === "profile" ? (
-            <form onSubmit={saveProfile} className="space-y-4 max-w-xl">
+            <form onSubmit={saveProfile} className="space-y-4 w-full max-w-3xl">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Profile</h2>
                 <p className="mt-1 text-sm text-muted">
@@ -1002,24 +1138,34 @@ export default function AdminSettingsPage() {
               <AdminFormActions submitLabel="Save Profile" saving={saving} />
             </form>
           ) : activeTab === "smtp" ? (
-            <form onSubmit={saveSmtp} className="space-y-4 max-w-4xl">
+            <form onSubmit={saveSmtp} className="space-y-5 w-full">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">SMTP Email</h2>
                 <p className="mt-1 text-sm text-muted">
-                  Configure outgoing email for enquiries, verification, and password reset.
+                  Configure outgoing email for registration verification, password reset, and enquiry notifications.
                 </p>
               </div>
 
               <AdminCheckbox
                 label="Enable SMTP email"
                 checked={smtp[SETTING_KEYS.smtpEnabled] === "true"}
-                onChange={(checked) =>
+                onChange={(checked) => {
+                  setSmtpExplicitlyDisabled(!checked);
                   setSmtp({
                     ...smtp,
                     [SETTING_KEYS.smtpEnabled]: checked ? "true" : "false",
-                  })
-                }
+                  });
+                }}
               />
+
+              {smtp[SETTING_KEYS.smtpEnabled] !== "true" &&
+                (smtp[SETTING_KEYS.smtpHost]?.trim() ||
+                  smtp[SETTING_KEYS.smtpUser]?.trim() ||
+                  smtp[SETTING_KEYS.smtpPass]?.trim()) && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 theme-dark:text-amber-300">
+                    SMTP email is currently disabled. Turn on <strong>Enable SMTP email</strong> and save settings so user registration and password reset emails use your credentials.
+                  </div>
+                )}
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <AdminInput
@@ -1028,27 +1174,32 @@ export default function AdminSettingsPage() {
                   value={smtp[SETTING_KEYS.smtpHost]}
                   error={smtpErrors[SETTING_KEYS.smtpHost]}
                   onChange={(event) =>
-                    setSmtp({ ...smtp, [SETTING_KEYS.smtpHost]: event.target.value })
+                    updateSmtpField(SETTING_KEYS.smtpHost, event.target.value)
                   }
                   placeholder="smtp.gmail.com"
                 />
-                <AdminInput
-                  label="SMTP Port"
-                  required={smtp[SETTING_KEYS.smtpEnabled] === "true"}
-                  value={smtp[SETTING_KEYS.smtpPort]}
-                  error={smtpErrors[SETTING_KEYS.smtpPort]}
-                  onChange={(event) =>
-                    setSmtp({ ...smtp, [SETTING_KEYS.smtpPort]: event.target.value })
-                  }
-                  placeholder="587"
-                />
+                <div>
+                  <AdminInput
+                    label="SMTP Port"
+                    required={smtp[SETTING_KEYS.smtpEnabled] === "true"}
+                    value={smtp[SETTING_KEYS.smtpPort]}
+                    error={smtpErrors[SETTING_KEYS.smtpPort]}
+                    onChange={(event) =>
+                      updateSmtpField(SETTING_KEYS.smtpPort, event.target.value)
+                    }
+                    placeholder="587"
+                  />
+                  <p className="mt-1 text-[11px] text-muted">
+                    Use 587 for STARTTLS or 465 for SSL/TLS.
+                  </p>
+                </div>
                 <AdminInput
                   label="SMTP Username"
                   required={smtp[SETTING_KEYS.smtpEnabled] === "true"}
                   value={smtp[SETTING_KEYS.smtpUser]}
                   error={smtpErrors[SETTING_KEYS.smtpUser]}
                   onChange={(event) =>
-                    setSmtp({ ...smtp, [SETTING_KEYS.smtpUser]: event.target.value })
+                    updateSmtpField(SETTING_KEYS.smtpUser, event.target.value)
                   }
                   placeholder="your-email@example.com"
                 />
@@ -1059,31 +1210,36 @@ export default function AdminSettingsPage() {
                   value={smtp[SETTING_KEYS.smtpPass]}
                   error={smtpErrors[SETTING_KEYS.smtpPass]}
                   onChange={(event) =>
-                    setSmtp({ ...smtp, [SETTING_KEYS.smtpPass]: event.target.value })
+                    updateSmtpField(SETTING_KEYS.smtpPass, event.target.value)
                   }
                   placeholder="App password or SMTP password"
                 />
-                <AdminInput
-                  label="From Email"
-                  type="email"
-                  required={smtp[SETTING_KEYS.smtpEnabled] === "true"}
-                  value={smtp[SETTING_KEYS.smtpFrom]}
-                  error={smtpErrors[SETTING_KEYS.smtpFrom]}
-                  onChange={(event) =>
-                    setSmtp({ ...smtp, [SETTING_KEYS.smtpFrom]: event.target.value })
-                  }
-                  placeholder="noreply@example.com"
-                />
+                <div>
+                  <AdminInput
+                    label="From Email"
+                    type="email"
+                    required={
+                      smtp[SETTING_KEYS.smtpEnabled] === "true" &&
+                      !validateEmail(smtp[SETTING_KEYS.smtpUser]?.trim() || "")
+                    }
+                    value={smtp[SETTING_KEYS.smtpFrom]}
+                    error={smtpErrors[SETTING_KEYS.smtpFrom]}
+                    onChange={(event) =>
+                      updateSmtpField(SETTING_KEYS.smtpFrom, event.target.value)
+                    }
+                    placeholder="noreply@example.com (optional if username is email)"
+                  />
+                  <p className="mt-1 text-[11px] text-muted">
+                    Leave blank to use SMTP Username if it is an email address.
+                  </p>
+                </div>
                 <AdminInput
                   label="Admin Notification Email"
                   type="email"
                   value={smtp[SETTING_KEYS.smtpAdminEmail]}
                   error={smtpErrors[SETTING_KEYS.smtpAdminEmail]}
                   onChange={(event) =>
-                    setSmtp({
-                      ...smtp,
-                      [SETTING_KEYS.smtpAdminEmail]: event.target.value,
-                    })
+                    updateSmtpField(SETTING_KEYS.smtpAdminEmail, event.target.value)
                   }
                   placeholder="admin@example.com"
                 />
@@ -1101,9 +1257,53 @@ export default function AdminSettingsPage() {
               />
 
               <AdminFormActions submitLabel="Save SMTP Settings" saving={saving} />
+
+              <div className="rounded-2xl border border-border bg-surface-elevated p-4 sm:p-5">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Test SMTP Connection
+                </h3>
+                <p className="mt-1 text-xs text-muted">
+                  Send a test email using these credentials to verify delivery before users register.
+                </p>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="min-w-0 flex-1">
+                    <AdminInput
+                      label="Send Test Email To"
+                      type="email"
+                      value={smtpTestEmail}
+                      onChange={(event) => setSmtpTestEmail(event.target.value)}
+                      placeholder="recipient@example.com"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSendTestEmail}
+                    disabled={testingSmtp || saving}
+                    className="h-11 shrink-0 rounded-xl border border-primary bg-primary/10 px-5 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {testingSmtp ? "Sending Test..." : "Send Test Email"}
+                  </button>
+                </div>
+                {smtpTestStatus && (
+                  <div
+                    className={`mt-3 rounded-xl border px-3.5 py-2.5 text-xs ${
+                      smtpTestStatus.type === "success"
+                        ? "border-green-600/40 bg-green-500/10 text-green-800 theme-dark:text-green-300"
+                        : "border-red-600/40 bg-red-500/10 text-red-800 theme-dark:text-red-300"
+                    }`}
+                  >
+                    <p className="font-medium">{smtpTestStatus.text}</p>
+                    {smtpTestStatus.detail ? (
+                      <p className="mt-1 opacity-80 break-all">
+                        SMTP Response: {smtpTestStatus.detail}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
             </form>
           ) : activeTab === "widget" ? (
-            <form onSubmit={saveWidget} className="space-y-4 max-w-4xl">
+            <form onSubmit={saveWidget} className="space-y-4 w-full">
 
               <WidgetCardEditor
                 label="Hero feature cards"
@@ -1127,7 +1327,7 @@ export default function AdminSettingsPage() {
               <AdminFormActions submitLabel="Save Widget Settings" saving={saving} />
             </form>
           ) : activeTab === "social" ? (
-            <form onSubmit={saveSocial} className="space-y-4 max-w-4xl">
+            <form onSubmit={saveSocial} className="space-y-4 w-full">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Social Media</h2>
                 <p className="mt-1 text-sm text-muted">
@@ -1145,7 +1345,7 @@ export default function AdminSettingsPage() {
               <AdminFormActions submitLabel="Save Social Media Settings" saving={saving} />
             </form>
           ) : (
-            <form onSubmit={savePayment} className="space-y-4 max-w-4xl">
+            <form onSubmit={savePayment} className="space-y-4 w-full">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Razorpay</h2>
                 <p className="mt-1 text-sm text-muted">

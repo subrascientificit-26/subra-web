@@ -1,6 +1,7 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProductDetailClient from "@/components/ProductDetailClient";
+import LiveRouteRefresher from "@/components/LiveRouteRefresher";
 import { prisma } from "@/lib/prisma";
 
 interface PageProps {
@@ -179,6 +180,7 @@ export default async function ProductDetailPage({
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <LiveRouteRefresher topics={["products", "categories", "subcategories"]} />
       <Navbar />
 
       <div className="flex-grow">

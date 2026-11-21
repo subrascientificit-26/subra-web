@@ -1,22 +1,31 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import { LucideIcon } from "lucide-react";
+import { DEFAULT_PRODUCT_IMAGE } from "@/lib/products";
+import { resolveProductImageUrl } from "@/lib/productImageUrl";
 
 interface ApplicationCardProps {
   icon: LucideIcon;
   title: string;
   description: string;
-  image: string;
+  image?: string | null;
   link: string;
 }
 
 export default function ApplicationCard({
   icon: Icon,
   title,
-  description,
   image,
   link,
 }: ApplicationCardProps) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const resolved = resolveProductImageUrl(image);
+  const displaySrc =
+    failedSrc === resolved ? DEFAULT_PRODUCT_IMAGE : resolved;
+
   return (
     <Link
       href={link}
@@ -24,9 +33,11 @@ export default function ApplicationCard({
     >
       <div className="relative h-40 overflow-hidden bg-surface-elevated sm:h-30">
         <Image
-          src={image || "/noimage.jpg"}
+          src={displaySrc}
           alt={title}
           fill
+          unoptimized
+          onError={() => setFailedSrc(resolved)}
           className="object-cover transition-transform duration-300 group-hover:scale-105"
         />
 

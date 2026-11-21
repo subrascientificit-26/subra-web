@@ -3,6 +3,7 @@
 import { PageHero } from "@/components/ui";
 import InfoSection from "@/components/InfoSection";
 import { ROUTES } from "@/lib/routes";
+import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
 import { useSiteSettings } from "@/lib/hooks/useSiteSettings";
 
 export default function PrivacyPolicyContent() {
@@ -12,7 +13,7 @@ export default function PrivacyPolicyContent() {
 
   return (
     <div className="flex-grow">
-      <div className="max-w-[1650px] mx-auto px-3 sm:px-5 lg:px-6 py-4">
+      <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
         <PageHero
           title="Privacy Policy"
           description={`How ${siteTitle || "we"} collect, use, and protect your personal information when you use our product catalogue and enquiry services.`}

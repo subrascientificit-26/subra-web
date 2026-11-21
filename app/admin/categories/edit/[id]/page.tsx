@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { ToastContainer } from '@/components/Toast';
 import { useToast } from '@/lib/useToast';
 import { useParams, useRouter } from 'next/navigation';
@@ -8,6 +9,8 @@ import Link from 'next/link';
 import { ArrowLeft, Save } from 'lucide-react';
 import SimpleImageUpload from '@/components/admin/SimpleImageUpload';
 import LoadingState from '@/components/ui/LoadingState';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
+import { ROUTES } from '@/lib/routes';
 import {
   ADMIN_FORM_CARD_CLASS,
   ADMIN_FORM_INPUT_CLASS,
@@ -26,7 +29,7 @@ export default function CategoryEditPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
-  const { toasts, removeToast, showError, showSuccess } = useToast();
+  const { toasts, removeToast, showError } = useToast();
 
   useEffect(() => {
     if (!id) return;
@@ -89,8 +92,8 @@ export default function CategoryEditPage() {
         return;
       }
 
-      showSuccess('Category updated successfully');
-      setTimeout(() => router.push('/admin/categories'), 1000);
+      toast.success('Category updated successfully');
+      router.push(ROUTES.admin.categories);
     } catch (err: any) {
       showError(err.message || 'Something went wrong');
     } finally {
@@ -107,8 +110,8 @@ export default function CategoryEditPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6 text-foreground">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background py-3 text-foreground">
+      <div className={`${PAGE_CONTAINER_CLASS} space-y-6`}>
         <div className="flex items-center gap-3">
           <Link
             href="/admin/categories"

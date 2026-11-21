@@ -48,7 +48,7 @@ export default function AdminTableSection<T>({
   const hasHeader = Boolean(search || toolbar);
 
   return (
-    <div className={`space-y-4 ${fullWidth ? "" : "xl:col-span-3"} ${className}`}>
+    <div className={`min-w-0 w-full space-y-4 ${fullWidth ? "" : "xl:col-span-3"} ${className}`}>
       {hasHeader && (
         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
           {search && (

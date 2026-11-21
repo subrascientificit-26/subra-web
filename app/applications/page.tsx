@@ -12,6 +12,8 @@ import {
   Pagination,
 } from '@/components/ui';
 import { ROUTES } from '@/lib/routes';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
+import { useLiveUpdates } from '@/lib/hooks/useLiveUpdates';
 
 import {
   FlaskConical,
@@ -24,6 +26,8 @@ import {
   PaletteIcon,
   Droplets,
   Wheat,
+  Menu,
+  X,
 } from 'lucide-react';
 
 interface Category {
@@ -52,20 +56,27 @@ function ApplicationsContent() {
   const [applications, setApplications] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/category')
+  const loadApplications = (showLoader = false) => {
+    fetch('/api/category', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         setApplications(Array.isArray(data) ? data : []);
-        setLoading(false);
+        if (showLoader) setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        if (showLoader) setLoading(false);
+      });
+  };
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [applications]);
+    loadApplications(true);
+  }, []);
+
+  useLiveUpdates(['categories', 'subcategories', 'products'], () => {
+    loadApplications(false);
+  });
 
   const totalPages = Math.max(
     1,
@@ -88,9 +99,22 @@ function ApplicationsContent() {
       <Navbar />
 
       <div className="flex-grow">
-        <div className="max-w-[1650px] mx-auto px-3 sm:px-5 lg:px-6 py-4">
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
-            <div className="sticky top-24 self-start">
+        <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
+          <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)] gap-6">
+            <div className="lg:hidden">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-hover"
+              >
+                {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+                {sidebarOpen ? 'Close Application Categories' : 'Application Categories'}
+              </button>
+            </div>
+
+            <div
+              className={`${sidebarOpen ? 'block' : 'hidden'} lg:block lg:sticky lg:top-[var(--site-header-height)] lg:max-h-[calc(100vh-var(--site-header-height))] lg:overflow-y-auto lg:self-start`}
+            >
               <ApplicationSidebar categories={applications} />
             </div>
 
@@ -114,7 +138,7 @@ function ApplicationsContent() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
                     {paginatedApplications.map((app, index) => {
                       const globalIndex = startIndex + index;
                       const IconComponent =

@@ -25,7 +25,7 @@ export default function SearchFilters({
   ];
 
   const brands = [
-    { name: 'Patient', count: 18 },
+    { name: 'Subra', count: 18 },
     { name: 'Qualigens', count: 12 },
     { name: 'Merck', count: 10 },
     { name: 'Rankem', count: 8 },

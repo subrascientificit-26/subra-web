@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { PageHero } from "@/components/ui";
 import { ROUTES } from "@/lib/routes";
+import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
 import { useSiteSettings } from "@/lib/hooks/useSiteSettings";
 
 const FAQS = [
@@ -102,7 +103,7 @@ export default function HelpSupportContent() {
 
   return (
     <div className="flex-grow">
-      <div className="max-w-[1650px] mx-auto px-3 sm:px-5 lg:px-6 py-4">
+      <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
         <PageHero
           title="Help & Support"
           description="Find answers to common questions, get in touch with our team, or submit a product enquiry."
@@ -179,7 +180,7 @@ export default function HelpSupportContent() {
 
             <Link
               href={ROUTES.enquiry}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-hover"
             >
               Submit an Enquiry
               <ArrowRight size={15} />

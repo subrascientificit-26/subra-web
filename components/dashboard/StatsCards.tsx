@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import {
   ShoppingCart,
   Users,
@@ -10,27 +9,11 @@ import {
 } from 'lucide-react';
 import LoadingState from '@/components/ui/LoadingState';
 import { ROUTES } from '@/lib/routes';
-
-interface DashboardStats {
-  totalProducts: number;
-  totalCustomers: number;
-  totalEnquiries: number;
-  totalCustomRequirements: number;
-  enquiriesThisMonth: number;
-  enquiriesLastMonth: number;
-}
+import { useAdminDashboard } from '@/lib/hooks/useAdminDashboard';
 
 export default function StatsCards() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/api/admin/dashboard', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setStats(data?.stats ?? null))
-      .catch(() => setStats(null))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, loading } = useAdminDashboard();
+  const stats = data?.stats ?? null;
 
   if (loading) {
     return <LoadingState message="Loading dashboard stats..." />;
@@ -53,9 +36,9 @@ export default function StatsCards() {
       value: String(stats?.totalProducts ?? 0),
       note: 'Active catalogue items',
       icon: Package,
-      iconBg: 'bg-[#9333ea20]',
-      iconColor: 'text-[#9333ea]',
-      hover: 'hover:border-[#9333ea]',
+      iconBg: 'bg-purple-100 border border-purple-200 theme-dark:bg-purple-500/15 theme-dark:border-purple-500/25',
+      iconColor: 'text-purple-700 theme-dark:text-purple-400',
+      hover: 'hover:border-purple-500',
       href: ROUTES.admin.products,
     },
     {
@@ -63,9 +46,9 @@ export default function StatsCards() {
       value: String(stats?.totalCustomers ?? 0),
       note: 'Registered users',
       icon: Users,
-      iconBg: 'bg-[#22c55e20]',
-      iconColor: 'text-[#22c55e]',
-      hover: 'hover:border-[#22c55e]',
+      iconBg: 'bg-emerald-100 border border-emerald-200 theme-dark:bg-emerald-500/15 theme-dark:border-emerald-500/25',
+      iconColor: 'text-emerald-700 theme-dark:text-emerald-400',
+      hover: 'hover:border-emerald-500',
       href: ROUTES.admin.users,
     },
     {
@@ -73,9 +56,9 @@ export default function StatsCards() {
       value: String(stats?.totalEnquiries ?? 0),
       note: enquiryChange,
       icon: Mail,
-      iconBg: 'bg-[#0b5cff20]',
-      iconColor: 'text-[#0b5cff]',
-      hover: 'hover:border-[#2563eb]',
+      iconBg: 'bg-blue-100 border border-blue-200 theme-dark:bg-primary/15 theme-dark:border-primary/25',
+      iconColor: 'text-blue-700 theme-dark:text-primary',
+      hover: 'hover:border-primary',
       href: ROUTES.admin.enquiry,
     },
     {
@@ -83,9 +66,9 @@ export default function StatsCards() {
       value: String(stats?.totalCustomRequirements ?? 0),
       note: 'Custom product submissions',
       icon: ShoppingCart,
-      iconBg: 'bg-[#f59e0b20]',
-      iconColor: 'text-[#f59e0b]',
-      hover: 'hover:border-[#f59e0b]',
+      iconBg: 'bg-amber-100 border border-amber-200 theme-dark:bg-amber-500/15 theme-dark:border-amber-500/25',
+      iconColor: 'text-amber-700 theme-dark:text-amber-400',
+      hover: 'hover:border-amber-500',
       href: ROUTES.customProducts,
     },
   ];

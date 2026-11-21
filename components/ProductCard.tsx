@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Trash2, Heart } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
 import { DEFAULT_PRODUCT_IMAGE } from "@/lib/products";
@@ -38,18 +38,13 @@ export default function ProductCard({
 }: ProductCardProps) {
   const { isFavorite, toggle } = useWishlist();
   const favorite = isFavorite(id);
-  const [imageSrc, setImageSrc] = useState(
-    resolveProductImageUrl(image || DEFAULT_PRODUCT_IMAGE)
-  );
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  useEffect(() => {
-    setImageSrc(resolveProductImageUrl(image || DEFAULT_PRODUCT_IMAGE));
-  }, [image]);
+  const resolved = resolveProductImageUrl(image || DEFAULT_PRODUCT_IMAGE);
+  const imageSrc = failedSrc === resolved ? DEFAULT_PRODUCT_IMAGE : resolved;
 
   const handleImageError = () => {
-    setImageSrc((current) =>
-      current === DEFAULT_PRODUCT_IMAGE ? current : DEFAULT_PRODUCT_IMAGE
-    );
+    setFailedSrc(resolved);
   };
 
   return (
@@ -84,7 +79,7 @@ export default function ProductCard({
       >
         <Heart
           size={15}
-          className={favorite ? "fill-red-500 text-red-500" : "text-muted hover:text-red-400"}
+          className={favorite ? "fill-red-500 text-red-500" : "text-muted hover:text-red-500"}
         />
       </button>
 
@@ -109,13 +104,13 @@ export default function ProductCard({
 
           <div className="mb-1 flex flex-wrap gap-1">
             {category && (
-              <span className="rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-primary">
+              <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-primary theme-light:bg-blue-50 theme-light:text-blue-700 theme-light:border-blue-200 font-semibold">
                 {category}
               </span>
             )}
 
             {subCategory && (
-              <span className="rounded border border-border bg-surface-elevated px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted">
+              <span className="rounded border border-border bg-surface-elevated px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted theme-light:bg-slate-100 theme-light:text-slate-700 theme-light:border-slate-200 font-medium">
                 {subCategory}
               </span>
             )}
@@ -123,34 +118,37 @@ export default function ProductCard({
 
           <div className="mb-1 flex-1 space-y-0.5 text-[10px] text-muted">
             <p className="line-clamp-1">
-              <span className="text-muted/70">CAS No:</span> {casNo || "N/A"}
+              <span className="text-muted font-medium">CAS No:</span>{" "}
+              <span className="text-foreground font-medium">{casNo || "N/A"}</span>
             </p>
 
             <p className="line-clamp-1">
-              <span className="text-muted/70">Purity:</span> {purity || "N/A"}
+              <span className="text-muted font-medium">Purity:</span>{" "}
+              <span className="text-foreground font-medium">{purity || "N/A"}</span>
             </p>
 
             <p className="line-clamp-1">
-              <span className="text-muted/70">Pack Size:</span> {packSize || "N/A"}
+              <span className="text-muted font-medium">Pack Size:</span>{" "}
+              <span className="text-foreground font-medium">{packSize || "N/A"}</span>
             </p>
 
             {inStock ? (
-              <div className="inline-flex w-fit items-center rounded-sm bg-green-600 px-1 py-[3px] text-[12px] font-medium leading-none text-white">
+              <div className="inline-flex w-fit items-center rounded-sm bg-green-600 px-1.5 py-[3px] text-[11px] font-semibold leading-none text-white shadow-xs">
                 In Stock
               </div>
             ) : (
-              <div className="inline-flex w-fit items-center rounded-sm bg-amber-700 px-1 py-[3px] text-[12px] font-medium leading-none text-white">
+              <div className="inline-flex w-fit items-center rounded-sm bg-amber-600 px-1.5 py-[3px] text-[11px] font-semibold leading-none text-white shadow-xs">
                 Out of Stock
               </div>
             )}
           </div>
 
-          <div className="mt-auto flex items-center justify-between gap-1.5">
-            <div className="text-xs font-bold text-primary">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-1.5 pt-1">
+            <div className="text-xs font-bold text-primary whitespace-nowrap">
               {price === null || Number.isNaN(price) ? "Price N/A" : `₹${price}`}
             </div>
 
-            <span className="rounded border border-primary bg-transparent px-1.5 py-0.5 text-[10px] font-semibold text-primary transition group-hover:bg-primary/10">
+            <span className="rounded border border-primary bg-transparent px-2 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap transition group-hover:bg-primary/10">
               View Details
             </span>
           </div>

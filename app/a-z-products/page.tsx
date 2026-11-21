@@ -8,6 +8,8 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { LoadingState, PageHero, SearchInput } from "@/components/ui";
 import { NAV_LINKS, ROUTES } from "@/lib/routes";
+import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 
 interface Product {
   id: number;
@@ -58,13 +60,25 @@ function AZProductsContent() {
     "Z",
   ];
 
-  useEffect(() => {
-    fetch("/api/products")
+  const loadProducts = (showLoader = false) => {
+    fetch("/api/products", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setProducts(Array.isArray(data) ? data : []))
-      .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (showLoader) setProducts([]);
+      })
+      .finally(() => {
+        if (showLoader) setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadProducts(true);
   }, []);
+
+  useLiveUpdates(["products"], () => {
+    loadProducts(false);
+  });
 
   const filteredProducts = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -103,39 +117,12 @@ function AZProductsContent() {
     return <LoadingState message="Loading products..." fullScreen />;
   }
 
-  {alphabet.map((letter) => {
-  const isAll = letter === "All";
-  const hasProducts = isAll || availableLetters.has(letter);
-
-  return (
-    <button
-      key={letter}
-      type="button"
-      disabled={!hasProducts}
-      onClick={() => {
-        if (!hasProducts) return;
-
-        setSearchTerm("");
-        setSelectedLetter(isAll ? null : letter);
-      }}
-      className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition ${
-        (isAll && !selectedLetter) || selectedLetter === letter
-          ? "bg-primary text-white shadow"
-          : hasProducts
-            ? "text-muted hover:bg-surface hover:text-foreground"
-            : "cursor-not-allowed opacity-40 text-muted"
-      }`}
-    >
-      {letter}
-    </button>
-  );
-})}
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Navbar />
 
       <div className="flex-grow">
-        <div className="mx-auto max-w-[1400px] px-4 py-4 md:px-6">
+        <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
           <PageHero
             title="A-Z Products"
             description="Browse our complete range of chemicals alphabetically."
@@ -216,12 +203,12 @@ function AZProductsContent() {
                       </h2>
                     </div>
 
-                   <div className="grid gap-2 p-4 md:grid-cols-3 lg:grid-cols-4">
+                   <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
   {groupedProducts[letter]?.map((product) => (
     <Link
       key={product.id}
       href={ROUTES.productDetail(product.id)}
-      className="group flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2 transition hover:bg-primary/10"
+      className="group flex items-center justify-between rounded-md border border-border bg-surface-elevated px-3 py-2 transition hover:border-primary/40 hover:bg-primary/10"
     >
       <span className="truncate text-xs font-medium text-foreground group-hover:text-primary">
         {product.name}

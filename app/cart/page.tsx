@@ -4,9 +4,10 @@ import CartClient from "@/components/CartClient";
 import Link from "next/link";
 import { Home } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
+import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
 
 export const metadata = {
-  title: "Cart - Patient Catalogue",
+  title: "Cart - Subra Catalogue",
   description: "Review the products you've added and request an enquiry.",
 };
 
@@ -15,8 +16,8 @@ export default function CartPage() {
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Navbar />
 
-      <main className="flex-grow px-2 md:px-4 lg:px-15 py-8">
-        <div className="max-w-[95%] 2xl:max-w-[1800px] mx-auto">
+      <main className="flex-grow py-6 sm:py-8">
+        <div className={PAGE_CONTAINER_CLASS}>
           <div className="flex items-center gap-2 text-sm mb-6 text-muted">
             <Link
               href={ROUTES.home}
@@ -32,11 +33,11 @@ export default function CartPage() {
           </div>
 
           <div className="mb-6">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2 text-foreground">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-2 text-foreground">
               Your Cart
             </h1>
 
-            <p className="text-muted text-base md:text-lg max-w-2xl">
+            <p className="text-muted text-sm sm:text-base md:text-lg max-w-2xl">
               Review the products you&apos;ve added and send us an enquiry.
             </p>
           </div>

@@ -39,6 +39,15 @@ import {
 } from "@/lib/profileValidation";
 
 import { saveSiteImage } from "@/lib/siteImage";
+import {
+  buildSmtpConfigFromMap,
+  createTransporterFromConfig,
+  formatRejectedRecipients,
+  formatSmtpFromAddress,
+} from "@/lib/smtp";
+import { validateEmail } from "@/lib/validators";
+import { escapeEmailHtml } from "@/lib/mail";
+import { emitRealtimeUpdate } from "@/lib/realtime";
 
 
 
@@ -191,7 +200,11 @@ async function persistSettings(entries: [string, string][]) {
 
 
 
-  return getSettingsMap(entries.map(([key]) => key));
+  const result = await getSettingsMap(entries.map(([key]) => key));
+
+  emitRealtimeUpdate(["settings"], "settings-updated");
+
+  return result;
 
 }
 
@@ -404,14 +417,116 @@ export async function PUT(req: Request) {
     console.error("Settings PUT error:", error);
 
     return NextResponse.json(
-
       { error: error instanceof Error ? error.message : "Failed to save settings" },
-
       { status: 500 }
-
     );
-
   }
+}
 
+export async function POST(req: Request) {
+  const auth = await requireAdmin(req);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const body = (await req.json()) as {
+      toEmail?: string;
+      settings?: Record<string, string>;
+    };
+
+    const saved = await getSettingsMap([...SMTP_SETTING_KEYS, SETTING_KEYS.siteName]);
+    const incoming =
+      body.settings && typeof body.settings === "object" ? body.settings : {};
+
+    const merged: Record<string, string> = { ...saved };
+    for (const key of [...SMTP_SETTING_KEYS, SETTING_KEYS.siteName]) {
+      if (typeof incoming[key] === "string") {
+        merged[key] = incoming[key];
+      }
+    }
+
+    const validation = validateSmtpSettings({
+      ...merged,
+      [SETTING_KEYS.smtpEnabled]: "true",
+    });
+    if (!validation.valid) {
+      return jsonFieldErrors(validation.errors);
+    }
+
+    const config = buildSmtpConfigFromMap(merged);
+    if (!config) {
+      return NextResponse.json(
+        { error: "Please complete all required SMTP settings before testing." },
+        { status: 400 }
+      );
+    }
+
+    const recipient = (
+      body.toEmail?.trim() ||
+      auth.user.email ||
+      config.adminEmail ||
+      config.from
+    ).trim();
+
+    if (!validateEmail(recipient)) {
+      return NextResponse.json(
+        { error: "Please enter a valid recipient email for the SMTP test." },
+        { status: 400 }
+      );
+    }
+
+    const transporter = createTransporterFromConfig(config);
+    await transporter.verify();
+
+    const brandName = config.siteName?.trim() || "Subra Scientific";
+    const info = await transporter.sendMail({
+      from: formatSmtpFromAddress(config),
+      to: recipient,
+      subject: `SMTP Test Email - ${brandName}`,
+      text: `${brandName} SMTP Test: Your SMTP settings are working correctly. Host: ${config.host}, Port: ${config.port}.`,
+      html: `
+        <div style="font-family:Segoe UI,Arial,sans-serif;max-width:560px;margin:20px auto;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#ffffff;color:#111827;">
+          <div style="background:linear-gradient(135deg,#1f8dff,#005fe0);color:#ffffff;padding:24px;text-align:center;">
+            <h2 style="margin:0;font-size:22px;">${escapeEmailHtml(brandName)}</h2>
+            <p style="margin:6px 0 0;font-size:13px;opacity:0.9;">SMTP Configuration Test</p>
+          </div>
+          <div style="padding:24px;font-size:15px;line-height:1.6;">
+            <p style="margin-top:0;">Your SMTP settings are working correctly.</p>
+            <p style="margin-bottom:0;color:#4b5563;font-size:13px;">
+              Host: <strong>${escapeEmailHtml(config.host)}</strong> &bull; Port: <strong>${config.port}</strong>
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+    const rejectedList = formatRejectedRecipients(info.rejected);
+    if (rejectedList) {
+      return NextResponse.json(
+        { error: `SMTP server rejected recipient: ${rejectedList}` },
+        { status: 502 }
+      );
+    }
+
+    const isEnabled = merged[SETTING_KEYS.smtpEnabled] === "true";
+
+    return NextResponse.json({
+      message: `Test email sent to ${recipient} (check Inbox and Spam).`,
+      smtpResponse: info.response,
+      warning: isEnabled
+        ? undefined
+        : "SMTP connection succeeded, but 'Enable SMTP email' is currently off. Turn it on and click Save Settings to send registration emails.",
+    });
+  } catch (error) {
+    console.error("SMTP test email error:", error);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to send test email. Please check your SMTP credentials.",
+      },
+      { status: 502 }
+    );
+  }
 }
 

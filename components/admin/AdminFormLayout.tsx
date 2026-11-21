@@ -3,6 +3,7 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 
 interface AdminFormLayoutProps {
   title: string;
@@ -30,8 +31,8 @@ export default function AdminFormLayout({
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-3">
-      <div className="max-w-7xl mx-auto w-full">
+    <div className="min-h-screen bg-background text-foreground py-3">
+      <div className={PAGE_CONTAINER_CLASS}>
         {/* HEADER */}
         <div className="flex items-center gap-3 mb-6">
           {showBackButton && (
@@ -63,12 +64,12 @@ export default function AdminFormLayout({
 
         {/* ALERTS */}
         {error && (
-          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">
+          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/40 rounded-lg text-red-700 theme-dark:text-red-400">
             {error}
           </div>
         )}
         {success && (
-          <div className="mb-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400">
+          <div className="mb-4 p-4 bg-green-500/10 border border-green-500/40 rounded-lg text-green-700 theme-dark:text-green-400">
             {success}
           </div>
         )}
@@ -95,7 +96,7 @@ export default function AdminFormLayout({
                 px-6 py-2
                 rounded-lg
                 bg-primary hover:bg-primary-hover
-                disabled:bg-surface-elevated disabled:cursor-not-allowed
+                disabled:opacity-50 disabled:cursor-not-allowed
                 text-white text-sm
                 font-medium
                 transition-all duration-200

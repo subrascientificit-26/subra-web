@@ -1,5 +1,8 @@
 import { existsSync } from "fs";
 import path from "path";
+import { validateCasNumber } from "@/lib/validators";
+
+export { validateCasNumber };
 
 export const IMPORT_REQUIRED_COLUMNS = [
   { keys: ["name", "product name", "product_name"], label: "Name" },
@@ -100,17 +103,6 @@ export function localFileExists(fileUrl: string) {
     : normalized;
 
   return existsSync(path.join(process.cwd(), "public", relative));
-}
-
-export function validateCasNumber(value: string) {
-  if (!value) {
-    return null;
-  }
-
-  const casRegex = /^\d{2,7}-\d{2}-\d$/;
-  return casRegex.test(value)
-    ? null
-    : "CAS Number format should be like 67-64-1";
 }
 
 export function validateImportRow(input: {

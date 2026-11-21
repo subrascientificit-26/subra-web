@@ -61,8 +61,8 @@ export default function Pagination({
               aria-current={isActive ? "page" : undefined}
               className={
                 isActive
-                  ? "min-w-[36px] rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-md shadow-blue-600/30"
-                  : "min-w-[36px] rounded-lg px-3 py-2 text-sm font-medium text-muted transition hover:bg-surface-elevated hover:text-foreground"
+                  ? "min-w-[36px] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                  : "min-w-[36px] rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground/80 transition hover:bg-surface-elevated hover:text-foreground hover:border-primary"
               }
             >
               {page}

@@ -5,11 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
-  LogOut,
-  User,
-  Mail,
-  Shield,
   LayoutDashboard,
+  Package,
   UserCircle,
 } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
@@ -133,6 +130,15 @@ export default function ProfileDropdown() {
             >
               <LayoutDashboard size={15} />
               My Dashboard
+            </Link>
+
+            <Link
+              href={ROUTES.externalProducts}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-surface-elevated transition"
+            >
+              <Package size={15} />
+              External Products
             </Link>
 
             {/* <button

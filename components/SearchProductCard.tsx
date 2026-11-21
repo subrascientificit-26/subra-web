@@ -1,7 +1,10 @@
 'use client';
 
 import Image from 'next/image';
+import { useState } from 'react';
 import { Heart, ShoppingCart } from 'lucide-react';
+import { DEFAULT_PRODUCT_IMAGE } from '@/lib/products';
+import { resolveProductImageUrl } from '@/lib/productImageUrl';
 
 interface Product {
   id: string;
@@ -25,15 +28,22 @@ export default function SearchProductCard({
   product,
   viewMode,
 }: SearchProductCardProps) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const resolvedSrc = resolveProductImageUrl(product.image);
+  const displaySrc =
+    failedSrc === resolvedSrc ? DEFAULT_PRODUCT_IMAGE : resolvedSrc;
+
   if (viewMode === 'list') {
     return (
       <div className="border border-border rounded-lg p-4 hover:border-primary/50 transition bg-surface">
         <div className="flex gap-4">
           <div className="relative w-24 h-24 flex-shrink-0">
             <Image
-              src={product.image || '/Lab-test.jpg'}
+              src={displaySrc}
               alt={product.name}
               fill
+              unoptimized
+              onError={() => setFailedSrc(resolvedSrc)}
               className="object-cover rounded-lg"
             />
           </div>
@@ -80,9 +90,11 @@ export default function SearchProductCard({
     <div className="border border-border rounded-lg overflow-hidden hover:border-primary/50 transition bg-surface group">
       <div className="relative h-40 bg-surface-elevated overflow-hidden">
         <Image
-          src={product.image || '/Lab-test.jpg'}
+          src={displaySrc}
           alt={product.name}
           fill
+          unoptimized
+          onError={() => setFailedSrc(resolvedSrc)}
           className="object-cover group-hover:scale-105 transition duration-300"
         />
 

@@ -9,10 +9,13 @@ import {
   saveGalleryProductImages,
   savePrimaryProductImage,
   saveUploadedImages,
+  validateUploadedImageFiles,
 } from '@/lib/productImages';
 import { parseProductDocumentsFromFormData } from '@/lib/productDocuments';
 import { parsePackSizeFromFormData } from '@/lib/productPackSizes';
-import { validateCasNumber } from '@/lib/productImportValidation';
+import { validateCasNumber } from '@/lib/validators';
+import { DEFAULT_PRODUCT_IMAGE } from '@/lib/products';
+import { emitRealtimeUpdate } from '@/lib/realtime';
 
 const documentTypes = ['COA', 'SDS', 'OTHER'] as const;
 
@@ -132,7 +135,7 @@ export async function POST(req: Request) {
     let isFeatured;
     let isFavorite;
     let specifications;
-    let documents;
+    let documents: ReturnType<typeof sanitizeDocuments> = [];
     let applications;
     let safetyInfo;
     let packSizes: ReturnType<typeof parsePackSizeFromFormData> = [];
@@ -140,6 +143,7 @@ export async function POST(req: Request) {
     let imagePaths: string[] = [];
     let primaryImageFile: FormDataEntryValue | null = null;
     let galleryImageFiles: FormDataEntryValue[] = [];
+    let legacyImageFiles: FormDataEntryValue[] = [];
     let multipartFormData: FormData | null = null;
 
     if (contentType.includes('multipart/form-data')) {
@@ -168,8 +172,7 @@ export async function POST(req: Request) {
 
       primaryImageFile = formData.get('primaryImage');
       galleryImageFiles = formData.getAll('galleryImages');
-      imagePaths = await saveUploadedImages(formData.getAll('images'));
-      documents = await parseProductDocumentsFromFormData(formData);
+      legacyImageFiles = formData.getAll('images');
     } else {
       const body = await req.json();
 
@@ -207,11 +210,12 @@ export async function POST(req: Request) {
     }
 
     if (!validateString(casNumber)) {
-      return NextResponse.json({ error: 'CAS Number required' }, { status: 400 });
+      return NextResponse.json({ error: 'CAS Number is required.' }, { status: 400 });
     }
 
-    const casValidationError = validateCasNumber(String(casNumber).trim());
-    if (casValidationError && casValidationError !== 'CAS Number is required') {
+    const trimmedCasNumber = String(casNumber).trim();
+    const casValidationError = validateCasNumber(trimmedCasNumber, { required: true });
+    if (casValidationError) {
       return NextResponse.json({ error: casValidationError }, { status: 400 });
     }
 
@@ -220,9 +224,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Subcategory is required' }, { status: 400 });
     }
 
+    if (multipartFormData) {
+      const imageValidationError =
+        (primaryImageFile ? validateUploadedImageFiles([primaryImageFile], 'Main image') : null) ||
+        validateUploadedImageFiles(galleryImageFiles, 'Gallery image') ||
+        validateUploadedImageFiles(legacyImageFiles, 'Image');
+
+      if (imageValidationError) {
+        return NextResponse.json({ error: imageValidationError }, { status: 400 });
+      }
+    }
+
     const duplicateProduct = await findDuplicateProduct(name.trim());
     if (duplicateProduct) {
       return NextResponse.json({ error: DUPLICATE_ERRORS.product }, { status: 409 });
+    }
+
+    if (multipartFormData) {
+      if (legacyImageFiles.length > 0) {
+        imagePaths = await saveUploadedImages(legacyImageFiles);
+      }
+      documents = await parseProductDocumentsFromFormData(multipartFormData);
     }
 
     const parsedPrice = sanitizeNumber(price) ?? 0;
@@ -245,7 +267,7 @@ export async function POST(req: Request) {
         slug,
         shortDescription: validateString(shortDescription) ? shortDescription : undefined,
         description: description.trim(),
-        casNumber: validateString(casNumber) ? casNumber : undefined,
+        casNumber: trimmedCasNumber,
         molecularFormula: validateString(molecularFormula) ? molecularFormula : undefined,
         molecularWeight: sanitizeNumber(molecularWeight),
         price: parsedPrice,
@@ -293,6 +315,21 @@ export async function POST(req: Request) {
       await saveGalleryProductImages(product.id, galleryImageFiles);
     }
 
+    const hasAnyUploadedImage =
+      imagePaths.length > 0 ||
+      (primaryImageFile instanceof File && primaryImageFile.size > 0) ||
+      galleryImageFiles.some((file) => file instanceof File && file.size > 0);
+
+    if (!hasAnyUploadedImage) {
+      await prisma.productImage.create({
+        data: {
+          imageUrl: DEFAULT_PRODUCT_IMAGE,
+          isPrimary: true,
+          productId: product.id,
+        },
+      });
+    }
+
     const savedProduct = await prisma.product.findUnique({
       where: { id: product.id },
       include: {
@@ -303,6 +340,8 @@ export async function POST(req: Request) {
         packSizes: true,
       },
     });
+
+    emitRealtimeUpdate(['products', 'dashboard'], 'product-created');
 
     return NextResponse.json(savedProduct ?? product);
   } catch (error: any) {
@@ -332,11 +371,12 @@ export async function PUT(req: Request) {
     let isFeatured;
     let isFavorite;
     let specifications;
-    let documents;
+    let documents: ReturnType<typeof sanitizeDocuments> = [];
     let applications;
     let safetyInfo;
 
     let imagePaths: string[] = [];
+    let legacyUploadFiles: FormDataEntryValue[] = [];
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -363,7 +403,7 @@ export async function PUT(req: Request) {
 
       documents = await parseProductDocumentsFromFormData(formData);
 
-      imagePaths = await saveUploadedImages(formData.getAll('images'));
+      legacyUploadFiles = formData.getAll('images');
     } else {
       const body = await req.json();
 
@@ -398,6 +438,21 @@ export async function PUT(req: Request) {
         { error: 'Product id, name and subcategory are required' },
         { status: 400 }
       );
+    }
+
+    if (casNumber !== undefined && String(casNumber).trim()) {
+      const casError = validateCasNumber(String(casNumber).trim());
+      if (casError) {
+        return NextResponse.json({ error: casError }, { status: 400 });
+      }
+    }
+
+    if (legacyUploadFiles.length > 0) {
+      const imageError = validateUploadedImageFiles(legacyUploadFiles, 'Image');
+      if (imageError) {
+        return NextResponse.json({ error: imageError }, { status: 400 });
+      }
+      imagePaths = await saveUploadedImages(legacyUploadFiles);
     }
 
     const parsedId = sanitizeNumber(id);
@@ -466,7 +521,7 @@ export async function PUT(req: Request) {
         slug,
         shortDescription: validateString(shortDescription) ? shortDescription : undefined,
         description: validateString(description) ? description : undefined,
-        casNumber: validateString(casNumber) ? casNumber : undefined,
+        casNumber: validateString(casNumber) ? String(casNumber).trim() : undefined,
         molecularFormula: validateString(molecularFormula) ? molecularFormula : undefined,
         molecularWeight: sanitizeNumber(molecularWeight),
         price: parsedPrice ?? undefined,
@@ -503,6 +558,8 @@ export async function PUT(req: Request) {
       });
     }
 
+    emitRealtimeUpdate(['products', 'dashboard'], 'product-updated');
+
     return NextResponse.json(product);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -534,6 +591,8 @@ export async function PATCH(req: Request) {
         packSizes: true,
       },
     });
+
+    emitRealtimeUpdate(['products'], 'product-favorite');
 
     return NextResponse.json(updatedProduct);
   } catch (error: any) {
@@ -569,6 +628,8 @@ export async function DELETE(req: Request) {
         deletedAt: new Date(),
       },
     });
+
+    emitRealtimeUpdate(['products', 'dashboard'], 'product-deleted');
 
     return NextResponse.json({ message: 'Product deleted successfully' });
   } catch (error: any) {

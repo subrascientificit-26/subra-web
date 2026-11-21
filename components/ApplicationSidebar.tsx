@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { ROUTES } from "@/lib/routes";
 import { STICKY_SIDEBAR_CLASS } from "@/lib/layout";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 
 interface Category {
   id: number;
@@ -26,32 +27,44 @@ export default function ApplicationSidebar({
 }: ApplicationSidebarProps) {
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [categories, setCategories] = useState<Category[]>(
+  const [fetchedCategories, setFetchedCategories] = useState<Category[]>(
     externalCategories ?? [],
   );
+  const categories = externalCategories ?? fetchedCategories;
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
     new Set(),
   );
 
-  useEffect(() => {
+  const loadSidebarCategories = useCallback(() => {
     if (externalCategories) {
-      setCategories(externalCategories);
       return;
     }
 
-    fetch("/api/category")
+    fetch("/api/category", { cache: "no-store" })
       .then((res) => res.json())
-      .then((data) => setCategories(Array.isArray(data) ? data : []))
-      .catch(() => setCategories([]));
+      .then((data) => setFetchedCategories(Array.isArray(data) ? data : []))
+      .catch(() => setFetchedCategories([]));
   }, [externalCategories]);
 
-  useEffect(() => {
-    fetch("/api/subcategory")
+  const loadSidebarSubCategories = useCallback(() => {
+    fetch("/api/subcategory", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setSubCategories(Array.isArray(data) ? data : []))
       .catch(() => setSubCategories([]));
   }, []);
+
+  useEffect(() => {
+    loadSidebarCategories();
+  }, [loadSidebarCategories]);
+
+  useEffect(() => {
+    loadSidebarSubCategories();
+  }, [loadSidebarSubCategories]);
+
+  useLiveUpdates(["categories"], loadSidebarCategories);
+
+  useLiveUpdates(["subcategories"], loadSidebarSubCategories);
 
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
@@ -77,7 +90,7 @@ export default function ApplicationSidebar({
 
   return (
     <aside
-      className={`w-full flex-shrink-0 md:w-64 lg:w-72 ${STICKY_SIDEBAR_CLASS}`}
+      className={`w-full flex-shrink-0 lg:w-72 ${STICKY_SIDEBAR_CLASS}`}
     >
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <div className="border-b border-border px-4 py-4">

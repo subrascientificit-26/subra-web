@@ -1,16 +1,17 @@
 'use client';
 import Image from 'next/image';
+import { PAGE_CONTAINER_CLASS } from '@/lib/layout';
 
 export default function CustomProductsHero() {
     return (
-        <div className="w-full bg-surface text-foreground px-4 md:px-4 border-b border-border">
-            <div className="max-w-[1600px] mx-auto">
+        <div className="w-full bg-surface text-foreground border-b border-border">
+            <div className={PAGE_CONTAINER_CLASS}>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[50%_50%] items-center overflow-hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-2 items-center overflow-hidden">
 
-                    <div className="p-6 sm:p-8 lg:p-12 z-10">
+                    <div className="py-6 sm:py-8 lg:py-12 pr-0 lg:pr-8 z-10 min-w-0">
 
-                        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-1">
+                        <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-1">
                             Custom Products
                         </h1>
 
@@ -87,7 +88,7 @@ export default function CustomProductsHero() {
                         </div>
                     </div>
 
-                    <div className="relative h-[260px] sm:h-[350px] lg:h-full min-h-[300px]">
+                    <div className="relative h-[220px] sm:h-[320px] lg:h-full lg:min-h-[340px]">
                         <Image
                             src="/Lab-test.jpg"
                             alt="Custom Products"
@@ -97,7 +98,7 @@ export default function CustomProductsHero() {
                         />
 
                         <div className="absolute inset-0 bg-black/30 theme-light:bg-black/20" />
-                        <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--surface)_0%,rgba(7,18,36,0.92)_12%,rgba(7,18,36,0.55)_28%,transparent_55%)] theme-light:bg-[linear-gradient(to_right,var(--surface)_0%,rgba(255,255,255,0.95)_12%,rgba(255,255,255,0.7)_28%,transparent_55%)]" />
+                        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,var(--surface)_0%,transparent_45%)] lg:bg-[linear-gradient(to_right,var(--surface)_0%,rgba(10,20,40,0.92)_12%,rgba(10,20,40,0.55)_28%,transparent_55%)] theme-light:bg-[linear-gradient(to_bottom,var(--surface)_0%,transparent_45%)] theme-light:lg:bg-[linear-gradient(to_right,var(--surface)_0%,rgba(255,255,255,0.95)_12%,rgba(255,255,255,0.7)_28%,transparent_55%)]" />
                     </div>
                 </div>
             </div>

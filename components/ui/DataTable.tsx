@@ -69,7 +69,7 @@ export default function DataTable<T>({
   }
 
   return (
-    <div className={`${TABLE_THEME.wrapper} ${className}`}>
+    <div className={`${TABLE_THEME.wrapper} w-full max-w-full ${className}`}>
       <ReactDataTable
         columns={tableColumns}
         data={data}
@@ -112,12 +112,12 @@ export function TablePanel({
 }) {
   return (
     <div
-      className={`space-y-4 ${fullWidth ? "" : "xl:col-span-3"} ${
-        fitViewport ? "h-full min-h-0 flex flex-col" : ""
+      className={`min-w-0 w-full space-y-4 ${fullWidth ? "" : "xl:col-span-3"} ${
+        fitViewport ? "xl:h-full xl:min-h-0 xl:flex xl:flex-col" : ""
       }`}
     >
       {search}
-      <div className={fitViewport ? "flex-1 min-h-0 overflow-auto" : ""}>
+      <div className={fitViewport ? "xl:flex-1 xl:min-h-0 xl:overflow-auto" : ""}>
         {children}
       </div>
     </div>

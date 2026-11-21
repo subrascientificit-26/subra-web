@@ -8,6 +8,10 @@ import {
   findDuplicateCategory,
 } from "@/lib/duplicateNames";
 import { DELETE_MESSAGES } from "@/lib/messages";
+import { DEFAULT_PRODUCT_IMAGE } from "@/lib/products";
+import { emitRealtimeUpdate } from "@/lib/realtime";
+
+export const dynamic = "force-dynamic";
 
 // GET ALL
 export async function GET() {
@@ -26,6 +30,7 @@ export async function GET() {
 
   const enriched = data.map((category) => ({
     ...category,
+    image: category.image || DEFAULT_PRODUCT_IMAGE,
     productCount: category.subcategories.reduce(
       (sum, sub) => sum + sub._count.products,
       0
@@ -74,8 +79,10 @@ export async function POST(req: Request) {
     }
 
     const category = await prisma.category.create({
-      data: { name, description, image: imagePath }
+      data: { name, description, image: imagePath || DEFAULT_PRODUCT_IMAGE }
     });
+
+    emitRealtimeUpdate(["categories", "subcategories", "products", "dashboard"], "category-created");
 
     return Response.json(category);
   } catch (err: any) {
@@ -133,6 +140,8 @@ export async function PUT(req: Request) {
         ...(imagePath && { image: imagePath })
       }
     });
+
+    emitRealtimeUpdate(["categories", "subcategories", "products", "dashboard"], "category-updated");
 
     return Response.json(updated);
   } catch (err: any) {
@@ -192,6 +201,8 @@ export async function DELETE(req: Request) {
   }
 
   await prisma.category.delete({ where: { id } });
+
+  emitRealtimeUpdate(["categories", "subcategories", "products", "dashboard"], "category-deleted");
 
   return Response.json({ message: "Deleted" });
 }

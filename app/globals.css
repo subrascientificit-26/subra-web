@@ -15,50 +15,52 @@
 
 :root,
 .theme-dark {
+  color-scheme: dark;
   --theme-primary: #0b5cff;
   --theme-accent: #ff2d2d;
   --background: #020817;
-  --foreground: #ededed;
-  --surface: #071224;
-  --surface-elevated: #0f172a;
-  --border: #374151;
+  --foreground: #f1f5f9;
+  --surface: #0a1428;
+  --surface-elevated: #13213c;
+  --border: #334155;
   --primary: #0b5ed7;
   --primary-hover: #0a53be;
   --accent: #2563eb;
   --muted: #94a3b8;
-  --danger: #ff2d2d;
-  --card-shadow: none;
-  --table-head-bg: #111a36;
-  --table-head-text: #94a3b8;
-  --table-row-bg: #0b1329;
-  --table-row-hover: #111c40;
+  --danger: #ef4444;
+  --card-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.45);
+  --table-head-bg: #12203d;
+  --table-head-text: #cbd5e1;
+  --table-row-bg: #0a1428;
+  --table-row-hover: #162647;
   --table-row-text: #f1f5f9;
-  --table-row-border: #1e293b;
-  --table-pagination-bg: #0b1329;
-  --table-empty-bg: #090f1c;
+  --table-row-border: #283954;
+  --table-pagination-bg: #0d1931;
+  --table-empty-bg: #0a1428;
 }
 
 .theme-light {
+  color-scheme: light;
   --theme-primary: #0b5cff;
   --theme-accent: #ff2d2d;
-  --background: #ffffff;
+  --background: #f8fafc;
   --foreground: #0f172a;
   --surface: #ffffff;
-  --surface-elevated: #f8fafc;
-  --border: #e2e8f0;
+  --surface-elevated: #f1f5f9;
+  --border: #cbd5e1;
   --primary: #0b5ed7;
   --primary-hover: #0a53be;
   --accent: #2563eb;
-  --muted: #64748b;
+  --muted: #475569;
   --danger: #dc2626;
-  --card-shadow: 0 1px 3px 0 rgb(15 23 42 / 0.08), 0 1px 2px -1px rgb(15 23 42 / 0.06);
-  --table-head-bg: #ffffff;
-  --table-head-text: #64748b;
+  --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --table-head-bg: #e2e8f0;
+  --table-head-text: #0f172a;
   --table-row-bg: #ffffff;
-  --table-row-hover: #f8fafc;
+  --table-row-hover: #f1f5f9;
   --table-row-text: #0f172a;
   --table-row-border: #e2e8f0;
-  --table-pagination-bg: #ffffff;
+  --table-pagination-bg: #f8fafc;
   --table-empty-bg: #ffffff;
 }
 
@@ -107,10 +109,15 @@ textarea {
   cursor: text;
 }
 
+select option {
+  background-color: var(--surface-elevated);
+  color: var(--foreground);
+}
+
 .input:invalid:not(:placeholder-shown),
 textarea:invalid:not(:placeholder-shown),
 select:invalid:not(:placeholder-shown) {
-  border-color: rgba(255, 45, 45, 0.5);
+  border-color: rgba(239, 68, 68, 0.7);
 }
 
 .required-mark {
@@ -180,7 +187,9 @@ select:invalid:not(:placeholder-shown) {
 }
 
 .theme-light .bg-surface.rounded-xl,
-.theme-light .bg-surface.rounded-2xl {
+.theme-light .bg-surface.rounded-2xl,
+.theme-dark .bg-surface.rounded-xl,
+.theme-dark .bg-surface.rounded-2xl {
   box-shadow: var(--card-shadow);
 }
 

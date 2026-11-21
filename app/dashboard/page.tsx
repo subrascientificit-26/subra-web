@@ -9,13 +9,17 @@ import {
   FaBox,
   FaShoppingCart,
   FaEnvelope,
-  FaClock,
   FaMailBulk,
 } from "react-icons/fa";
 import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
 import { ROUTES } from "@/lib/routes";
-import { getDisplayName, getUserInitials } from "@/lib/user";
+import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
+import { getDisplayName, getUserInitials, type ProfileUser } from "@/lib/user";
+import { isEnquiryImageUrl } from "@/lib/enquiry";
+import { DEFAULT_PRODUCT_IMAGE } from "@/lib/products";
+import { resolveProductImageUrl } from "@/lib/productImageUrl";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 import LoadingState from "@/components/ui/LoadingState";
 import DataTable from "@/components/ui/DataTable";
 import Navbar from "@/components/Navbar";
@@ -34,34 +38,51 @@ interface DashboardStats {
 interface RecentEnquiry {
   id: string;
   title: string;
+  fileUrl?: string | null;
   date: string;
 }
 
 export default function UserDashboard() {
   const router = useRouter();
   const { toasts, removeToast, showError } = useToast();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<ProfileUser | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentEnquiries, setRecentEnquiries] = useState<RecentEnquiry[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const refreshDashboardStats = async () => {
+    try {
+      const statsRes = await fetch("/api/dashboard/stats", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setStats(statsData.stats ?? null);
+        setRecentEnquiries(statsData.recentEnquiries ?? []);
+      }
+    } catch {
+      // Keep existing state on transient error
+    }
+  };
 
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
         const [userRes, statsRes] = await Promise.all([
-          fetch("/api/auth/me", { credentials: "include" }),
-          fetch("/api/dashboard/stats", { credentials: "include" }),
+          fetch("/api/auth/me", { credentials: "include", cache: "no-store" }),
+          fetch("/api/dashboard/stats", { credentials: "include", cache: "no-store" }),
         ]);
 
         if (!userRes.ok) {
-          router.push(ROUTES.login);
+          router.replace(ROUTES.login);
           return;
         }
 
         const userData = await userRes.json();
 
         if (userData.user?.role === "admin") {
-          router.push(ROUTES.admin.dashboard);
+          router.replace(ROUTES.admin.dashboard);
           return;
         }
 
@@ -74,7 +95,7 @@ export default function UserDashboard() {
         }
       } catch {
         showError("Failed to load user data");
-        router.push(ROUTES.login);
+        router.replace(ROUTES.login);
       } finally {
         setLoading(false);
       }
@@ -82,6 +103,10 @@ export default function UserDashboard() {
 
     fetchDashboard();
   }, [router, showError]);
+
+  useLiveUpdates(["enquiries", "users", "custom-requirements"], () => {
+    void refreshDashboardStats();
+  });
 
   const enquiryColumns: TableColumn<RecentEnquiry>[] = useMemo(
     () => [
@@ -96,6 +121,46 @@ export default function UserDashboard() {
         grow: 1.5,
         selector: (row) => row.title,
         cell: (row) => <span className="text-foreground">{row.title}</span>,
+      },
+      {
+        name: "Image / File",
+        width: "110px",
+        center: true,
+        cell: (row) => {
+          if (!row.fileUrl) return <span className="text-xs text-muted">—</span>;
+          const resolved = resolveProductImageUrl(row.fileUrl);
+          if (isEnquiryImageUrl(row.fileUrl)) {
+            return (
+              <a
+                href={resolved}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 w-9 overflow-hidden rounded-lg border border-border bg-surface-elevated"
+                title="View uploaded image"
+              >
+                <img
+                  src={resolved}
+                  alt={row.title}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                  }}
+                  className="h-full w-full object-cover"
+                />
+              </a>
+            );
+          }
+          return (
+            <a
+              href={resolved}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              View File
+            </a>
+          );
+        },
       },
       {
         name: "Date",
@@ -123,29 +188,29 @@ export default function UserDashboard() {
 
       <Navbar />
 
-      <main className="flex-grow max-w-7xl mx-auto w-full px-4 py-8">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-lg p-6 mb-8">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-xl font-bold">
+      <main className={`flex-grow ${PAGE_CONTAINER_CLASS} py-6 sm:py-8`}>
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex h-12 w-12 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-base sm:text-xl font-bold">
               {initials}
             </div>
-            <div>
-              <h2 className="text-3xl font-bold">Welcome, {displayName}!</h2>
-              <p className="text-blue-100">{user?.email}</p>
+            <div className="min-w-0">
+              <h2 className="text-xl sm:text-3xl font-bold truncate">Welcome, {displayName}!</h2>
+              <p className="text-blue-100 text-xs sm:text-base break-all">{user?.email}</p>
             </div>
           </div>
         </div>
 
-        <div className="mb-8 rounded-lg border border-border bg-surface p-6">
-          <h3 className="mb-4 text-xl font-bold text-foreground">Profile Details</h3>
+        <div className="mb-8 rounded-lg border border-border bg-surface p-4 sm:p-6">
+          <h3 className="mb-4 text-lg sm:text-xl font-bold text-foreground">Profile Details</h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-muted">Full Name</p>
-              <p className="text-foreground font-medium">{displayName}</p>
+              <p className="text-foreground font-medium break-words">{displayName}</p>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-muted">Email</p>
-              <p className="text-foreground font-medium">{user?.email}</p>
+              <p className="text-foreground font-medium break-all">{user?.email}</p>
             </div>
             <div>
               <p className="text-sm text-muted">Account Type</p>
@@ -154,7 +219,29 @@ export default function UserDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="mb-8 rounded-lg border border-border bg-surface p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <FaBox className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg font-bold text-foreground">
+                External Products Catalog
+              </h3>
+              <p className="text-xs sm:text-sm text-muted">
+                Browse exclusive external products with pack details, HSN, GST, and request enquiries directly.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={ROUTES.externalProducts}
+            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-primary hover:bg-primary-hover text-white px-4 py-2.5 text-sm font-semibold transition"
+          >
+            View External Products
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
           <div className="rounded-lg border border-border bg-surface p-6 border-l-4 border-l-primary">
             <div className="flex items-center justify-between">
               <div>
@@ -190,7 +277,7 @@ export default function UserDashboard() {
                   {stats?.enquiriesThisMonth ?? 0} this month
                 </p>
               </div>
-              <FaEnvelope className="w-10 h-10 text-purple-400" />
+              <FaEnvelope className="w-10 h-10 text-purple-600 theme-dark:text-purple-400" />
             </div>
           </div>
         </div>
@@ -211,7 +298,7 @@ export default function UserDashboard() {
 
           <div className="rounded-lg border border-border bg-surface p-6">
             <h3 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-              <FaMailBulk className="text-purple-400" /> Recent Enquiries
+              <FaMailBulk className="text-purple-600 theme-dark:text-purple-400" /> Recent Enquiries
             </h3>
 
             {recentEnquiries.length === 0 ? (
@@ -225,7 +312,6 @@ export default function UserDashboard() {
                   paginationPerPage={3}
                   fixedPageSize
                   showRowIndex={false}
-                  responsive={false}
                 />
               </div>
             )}

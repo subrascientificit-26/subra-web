@@ -14,6 +14,7 @@ import {
 import { PageHero } from "@/components/ui";
 import WidgetCardIcon from "@/components/WidgetCardIcon";
 import { ROUTES } from "@/lib/routes";
+import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
 import { useSiteSettings } from "@/lib/hooks/useSiteSettings";
 
 const VALUES = [
@@ -44,7 +45,7 @@ export default function AboutUsContent() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <div className="flex-grow">
-        <div className="max-w-[1650px] mx-auto px-3 sm:px-5 lg:px-6 py-4">
+        <div className={`${PAGE_CONTAINER_CLASS} py-4`}>
           <PageHero
             title="About Us"
             description={`Learn more about ${siteTitle || "our company"} — your trusted partner for high-quality specialty chemicals, laboratory reagents, instruments, and lab consumables.`}

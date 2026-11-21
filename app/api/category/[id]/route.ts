@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { DELETE_MESSAGES } from "@/lib/messages";
+import { emitRealtimeUpdate } from "@/lib/realtime";
 
 function parseIdFromReq(req: Request, context: any) {
   const paramId = context?.params?.id;
@@ -98,6 +99,8 @@ export async function DELETE(req: Request, context: any) {
   await prisma.category.delete({
     where: { id },
   });
+
+  emitRealtimeUpdate(["categories", "subcategories", "products", "dashboard"], "category-deleted");
 
   return Response.json({ message: "Category deleted" });
 }

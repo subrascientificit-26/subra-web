@@ -19,6 +19,9 @@ export interface CartItem {
   casNo?: string;
   category?: string;
   subCategory?: string;
+  source?: "product" | "external";
+  href?: string;
+  productCode?: string;
 }
 
 interface CartContextValue {
@@ -26,8 +29,13 @@ interface CartContextValue {
   count: number;
   subtotal: number;
   addItem: (item: CartItem) => void;
-  removeItem: (id: number, packSize: string) => void;
-  updateQuantity: (id: number, packSize: string, quantity: number) => void;
+  removeItem: (id: number, packSize: string, source?: "product" | "external") => void;
+  updateQuantity: (
+    id: number,
+    packSize: string,
+    quantity: number,
+    source?: "product" | "external"
+  ) => void;
   clearCart: () => void;
 }
 
@@ -35,8 +43,17 @@ const STORAGE_KEY = "site-cart-items";
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-function sameLine(a: CartItem, id: number, packSize: string) {
-  return a.id === id && a.packSize === packSize;
+function sameLine(
+  a: CartItem,
+  id: number,
+  packSize: string,
+  source: "product" | "external" = "product"
+) {
+  return (
+    a.id === id &&
+    a.packSize === packSize &&
+    (a.source ?? "product") === source
+  );
 }
 
 export default function CartProvider({
@@ -48,19 +65,26 @@ export default function CartProvider({
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setItems(parsed);
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setItems(parsed);
+          }
         }
+      } catch {
+        // Ignore malformed storage
+      } finally {
+        setHydrated(true);
       }
-    } catch {
-      // Ignore malformed storage
-    } finally {
-      setHydrated(true);
-    }
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -73,14 +97,15 @@ export default function CartProvider({
   }, [items, hydrated]);
 
   const addItem = useCallback((item: CartItem) => {
+    const source = item.source ?? "product";
     setItems((current) => {
       const existing = current.find((line) =>
-        sameLine(line, item.id, item.packSize)
+        sameLine(line, item.id, item.packSize, source)
       );
 
       if (existing) {
         return current.map((line) =>
-          sameLine(line, item.id, item.packSize)
+          sameLine(line, item.id, item.packSize, source)
             ? { ...line, quantity: line.quantity + item.quantity }
             : line
         );
@@ -90,18 +115,26 @@ export default function CartProvider({
     });
   }, []);
 
-  const removeItem = useCallback((id: number, packSize: string) => {
-    setItems((current) =>
-      current.filter((line) => !sameLine(line, id, packSize))
-    );
-  }, []);
+  const removeItem = useCallback(
+    (id: number, packSize: string, source: "product" | "external" = "product") => {
+      setItems((current) =>
+        current.filter((line) => !sameLine(line, id, packSize, source))
+      );
+    },
+    []
+  );
 
   const updateQuantity = useCallback(
-    (id: number, packSize: string, quantity: number) => {
+    (
+      id: number,
+      packSize: string,
+      quantity: number,
+      source: "product" | "external" = "product"
+    ) => {
       const next = Math.max(1, Math.floor(quantity) || 1);
       setItems((current) =>
         current.map((line) =>
-          sameLine(line, id, packSize) ? { ...line, quantity: next } : line
+          sameLine(line, id, packSize, source) ? { ...line, quantity: next } : line
         )
       );
     },

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SidebarNavItem } from "@/components/ui/DynamicNav";
+import { subscribeLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 
 export type SidebarSectionName =
   | "navbar"
@@ -12,6 +13,35 @@ export type SidebarSectionName =
 
 const EMPTY_FALLBACK: SidebarNavItem[] = [];
 
+export interface SidebarFallbackItem {
+  id?: number;
+  label: string;
+  href: string;
+  children?: readonly SidebarFallbackItem[];
+}
+
+function normalizeFallbackItems(
+  items: readonly SidebarFallbackItem[],
+  depthSeed = 0
+): SidebarNavItem[] {
+  return items.map((item, index) => {
+    const generatedId = -(depthSeed * 100 + index + 1);
+    return {
+      id: item.id ?? generatedId,
+      label: item.label,
+      href: item.href,
+      ...(item.children
+        ? {
+            children: normalizeFallbackItems(
+              item.children,
+              Math.abs(generatedId)
+            ),
+          }
+        : {}),
+    };
+  });
+}
+
 type CacheEntry = {
   data?: SidebarNavItem[];
   promise?: Promise<SidebarNavItem[]>;
@@ -19,6 +49,22 @@ type CacheEntry = {
 
 const sidebarCache = new Map<SidebarSectionName, CacheEntry>();
 const cacheListeners = new Set<() => void>();
+let unsubscribeLiveSidebar: (() => void) | null = null;
+
+function ensureLiveSidebarSubscription() {
+  if (!unsubscribeLiveSidebar && cacheListeners.size > 0) {
+    unsubscribeLiveSidebar = subscribeLiveUpdates(["sidebar"], () => {
+      invalidateSidebarCache();
+    });
+  }
+}
+
+function cleanupLiveSidebarSubscription() {
+  if (cacheListeners.size === 0 && unsubscribeLiveSidebar) {
+    unsubscribeLiveSidebar();
+    unsubscribeLiveSidebar = null;
+  }
+}
 
 export function invalidateSidebarCache(section?: SidebarSectionName) {
   if (section) {
@@ -40,7 +86,9 @@ function fetchSidebarSection(
     return existing.promise;
   }
 
-  const promise = fetch(`/api/sidebar?section=${section}&tree=true`)
+  const promise = fetch(`/api/sidebar?section=${section}&tree=true`, {
+    cache: "no-store",
+  })
     .then((res) => res.json())
     .then((data) => {
       const items = Array.isArray(data) ? data : [];
@@ -58,34 +106,42 @@ function fetchSidebarSection(
 
 export function useSidebarItems(
   section: SidebarSectionName,
-  fallback: SidebarNavItem[] = EMPTY_FALLBACK
+  fallback: readonly SidebarFallbackItem[] = EMPTY_FALLBACK
 ) {
-  const [items, setItems] = useState<SidebarNavItem[]>(fallback);
-  const [loading, setLoading] = useState(true);
+  const fallbackRef = useRef(fallback);
+  const [items, setItems] = useState<SidebarNavItem[]>(() => {
+    const cached = sidebarCache.get(section);
+    return cached?.data && cached.data.length > 0
+      ? cached.data
+      : normalizeFallbackItems(fallback);
+  });
+  const [loading, setLoading] = useState(
+    () => !sidebarCache.get(section)?.data
+  );
   const [cacheTick, setCacheTick] = useState(0);
+
+  useEffect(() => {
+    fallbackRef.current = fallback;
+  }, [fallback]);
 
   useEffect(() => {
     const listener = () => setCacheTick((tick) => tick + 1);
     cacheListeners.add(listener);
+    ensureLiveSidebarSubscription();
     return () => {
       cacheListeners.delete(listener);
+      cleanupLiveSidebarSubscription();
     };
   }, []);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-
-    const cached = sidebarCache.get(section);
-    if (cached?.data) {
-      setItems(cached.data.length > 0 ? cached.data : fallback);
-      setLoading(false);
-      return;
-    }
 
     fetchSidebarSection(section).then((data) => {
       if (!active) return;
-      setItems(data.length > 0 ? data : fallback);
+      setItems(
+        data.length > 0 ? data : normalizeFallbackItems(fallbackRef.current)
+      );
       setLoading(false);
     });
 

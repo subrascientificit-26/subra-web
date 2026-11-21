@@ -7,7 +7,7 @@ import { useSiteSettings } from "@/lib/hooks/useSiteSettings";
 import { PAGE_CONTAINER_CLASS } from "@/lib/layout";
 import SiteBranding from "@/components/SiteBranding";
 import SocialLinkIcon from "@/components/SocialLinkIcon";
-import { NAV_LINKS } from "@/lib/routes";
+import { NAV_LINKS, ROUTES } from "@/lib/routes";
 
 export default function Footer() {
   const { items: quickLinks } = useSidebarItems("footer", NAV_LINKS.footer.quickLinks);
@@ -18,12 +18,12 @@ export default function Footer() {
   const { settings } = useSiteSettings();
 
   return (
-    <footer className="bg-surface text-muted py-0">
+    <footer className="border-t border-border bg-surface text-muted py-0">
       <div className={PAGE_CONTAINER_CLASS}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-6 py-3 border-b border-border">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 py-5 border-b border-border">
           <div>
             <SiteBranding
-              href=""
+              href={ROUTES.home}
               showTagline
               titleClassName="text-red-500 font-bold text-2xl"
               taglineClassName="text-xs font-bold text-muted"

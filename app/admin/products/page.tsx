@@ -1,26 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Package, Upload } from "lucide-react";
+import Link from "next/link";
+import { FileSpreadsheet, Upload } from "lucide-react";
 
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ImportResultsModal, {
   type ImportResultRow,
 } from "@/components/admin/ImportResultsModal";
+import SampleExcelModal, {
+  type SampleExcelSheet,
+} from "@/components/admin/SampleExcelModal";
 import AdminListLayout from "@/components/admin/AdminListLayout";
 import AdminTableSection from "@/components/admin/AdminTableSection";
 import AdminActionButtons from "@/components/admin/AdminActionButtons";
-import { BadgeCell, DescriptionCell, ImageCell } from "@/components/admin/DetailCells";
+import { BadgeCell, ImageCell } from "@/components/admin/DetailCells";
 import type { TableColumn } from "react-data-table-component";
 import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/lib/useToast";
+import { useLiveUpdates } from "@/lib/hooks/useLiveUpdates";
 import { ROUTES } from "@/lib/routes";
 import { ADMIN_TOOLBAR_BTN_CLASS, ADMIN_TOOLBAR_SELECT_CLASS } from "@/lib/admin/formStyles";
 
 export default function ProductsPage() {
-  const router = useRouter();
-
   // Core API Operational States
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +41,10 @@ export default function ProductsPage() {
     rows: ImportResultRow[];
     errors: string[];
   } | null>(null);
+  const [samplePreviewOpen, setSamplePreviewOpen] = useState(false);
+  const [sampleLoading, setSampleLoading] = useState(false);
+  const [sampleError, setSampleError] = useState<string | null>(null);
+  const [sampleSheets, setSampleSheets] = useState<SampleExcelSheet[]>([]);
 
   // FETCH CONTROLLER
   const loadProducts = async (showLoader = true) => {
@@ -64,8 +70,33 @@ export default function ProductsPage() {
   };
 
   useEffect(() => {
-    loadProducts(true);
-  }, []);
+    let active = true;
+    fetch("/api/products", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active) return;
+        if (Array.isArray(data)) setProducts(data);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        showError(
+          err instanceof Error
+            ? err.message
+            : "Execution error during network sync cascade"
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [showError]);
+
+  useLiveUpdates(["products", "categories", "subcategories"], () => {
+    void loadProducts(false);
+  });
 
   // STATE-DRIVEN SYSTEM TRANSFORMERS (Deduplication validation mappings)
   const categories = useMemo(() => {
@@ -115,9 +146,68 @@ export default function ProductsPage() {
     }
   };
 
-  // ROUTING SLOTS
-  const handleEdit = (product: any) => {
-    router.push(`/admin/products/edit/${product.id}`, { scroll: false });
+  // ROUTING SLOTS (handled via prefetched Link elements)
+
+  const handleOpenSamplePreview = async () => {
+    setSamplePreviewOpen(true);
+
+    if (sampleSheets.length > 0 && !sampleError) {
+      return;
+    }
+
+    setSampleLoading(true);
+    setSampleError(null);
+
+    try {
+      const response = await fetch("/templates/product-import-template.xlsx", {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("Could not load sample Excel file.");
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(arrayBuffer, { type: "array" });
+
+      const parsedSheets: SampleExcelSheet[] = workbook.SheetNames.map((sheetName) => {
+        const worksheet = workbook.Sheets[sheetName];
+        const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+          header: 1,
+          defval: "",
+        });
+
+        const nonEmptyRows = matrix.filter(
+          (row) => Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== "")
+        );
+
+        const headerRow = (nonEmptyRows[0] ?? []).map((cell) =>
+          String(cell ?? "").trim()
+        );
+        const bodyRows = nonEmptyRows.slice(1).map((row) =>
+          headerRow.map((_, colIdx) => String(row[colIdx] ?? ""))
+        );
+
+        return {
+          name: sheetName,
+          headers: headerRow,
+          rows: bodyRows,
+        };
+      }).filter((sheet) => sheet.headers.length > 0);
+
+      if (parsedSheets.length === 0) {
+        throw new Error("Sample Excel template has no readable columns.");
+      }
+
+      setSampleSheets(parsedSheets);
+    } catch (err) {
+      setSampleError(
+        err instanceof Error ? err.message : "Failed to load sample Excel preview."
+      );
+    } finally {
+      setSampleLoading(false);
+    }
   };
 
   const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -235,7 +325,9 @@ export default function ProductsPage() {
   const dtColumns: TableColumn<any>[] = [
     {
       name: "Image",
-      width: "80px",
+      grow: 1,
+      minWidth: "100px",
+      center: true,
       cell: (row) => (
         <ImageCell
           src={
@@ -252,7 +344,8 @@ export default function ProductsPage() {
       selector: (row: any) => row.name,
       sortable: true,
       wrap: true,
-      grow: 2,
+      grow: 1,
+      minWidth: "145px",
       cell: (row: any) => (
         <div className="py-2">
           <div className="font-semibold text-foreground text-sm tracking-tight">
@@ -265,7 +358,9 @@ export default function ProductsPage() {
       name: "Category",
       selector: (row: any) => row.subCategory?.category?.name || "",
       sortable: true,
-      width: "130px",
+      grow: 1,
+      minWidth: "120px",
+      center: true,
       cell: (row: any) => (
         <BadgeCell
           label={row.subCategory?.category?.name || "Unclassified"}
@@ -277,7 +372,9 @@ export default function ProductsPage() {
       name: "Subcategory",
       selector: (row: any) => row.subCategory?.name || "",
       sortable: true,
-      width: "130px",
+      grow: 1,
+      minWidth: "140px",
+      center: true,
       cell: (row: any) => (
         <BadgeCell
           label={row.subCategory?.name || "Base Segment"}
@@ -286,19 +383,14 @@ export default function ProductsPage() {
       ),
     },
     {
-      name: "Description",
-      grow: 2,
-      cell: (row: any) => (
-        <DescriptionCell text={row.shortDescription || row.description} />
-      ),
-    },
-    {
       name: "Unit Price",
       selector: (row: any) => Number(row.price) || 0,
       sortable: true,
-      width: "120px",
+      grow: 1,
+      minWidth: "120px",
+      center: true,
       cell: (row: any) => (
-        <span className="font-mono font-bold text-emerald-400 text-sm">
+        <span className="font-mono font-bold text-emerald-600 theme-dark:text-emerald-400 text-sm">
           ₹
           {(Number(row.price) || 0).toLocaleString("en-IN", {
             minimumFractionDigits: 2,
@@ -310,20 +402,22 @@ export default function ProductsPage() {
       name: "Stock",
       selector: (row: any) => Number(row.stock) || 0,
       sortable: true,
-      width: "140px",
+      grow: 1,
+      minWidth: "130px",
+      center: true,
       cell: (row: any) => {
         const amt = Number(row.stock) || 0;
         return amt > 0 ? (
-          <div className="flex flex-col gap-1">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-fit">
-                Active Stock
+          <div className="flex flex-col items-center gap-1">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 theme-dark:bg-emerald-500/15 theme-dark:text-emerald-300 theme-dark:border-emerald-500/35 w-fit">
+              Active Stock
             </span>
-            <span className="text-xs font-mono text-muted font-semibold pl-1">
+            <span className="text-xs font-mono text-muted font-semibold">
               {amt} units left
             </span>
           </div>
         ) : (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800 border border-rose-300 theme-dark:bg-rose-500/15 theme-dark:text-rose-300 theme-dark:border-rose-500/35">
             Depleted Out
           </span>
         );
@@ -331,11 +425,13 @@ export default function ProductsPage() {
     },
     {
       name: "Actions",
-      width: "120px",
+      grow: 1,
+      minWidth: "135px",
       center: true,
       cell: (row) => (
         <AdminActionButtons
-          onEdit={() => handleEdit(row)}
+          viewHref={ROUTES.admin.productView(row.id)}
+          editHref={ROUTES.admin.productEdit(row.id)}
           onDelete={() => handleDelete(row.id)}
         />
       ),
@@ -365,7 +461,7 @@ export default function ProductsPage() {
                 setSelectedCategory(e.target.value);
                 setSelectedSubcategory("");
               }}
-              className={`w-44 ${ADMIN_TOOLBAR_SELECT_CLASS}`}
+              className={`w-full sm:w-44 ${ADMIN_TOOLBAR_SELECT_CLASS}`}
             >
               <option value="">All Categories</option>
               {categories.map((c) => (
@@ -378,7 +474,7 @@ export default function ProductsPage() {
             <select
               value={selectedSubcategory}
               onChange={(e) => setSelectedSubcategory(e.target.value)}
-              className={`w-44 ${ADMIN_TOOLBAR_SELECT_CLASS}`}
+              className={`w-full sm:w-44 ${ADMIN_TOOLBAR_SELECT_CLASS}`}
             >
               <option value="">All Sub Categories</option>
               {subcategories.map((s) => (
@@ -391,32 +487,42 @@ export default function ProductsPage() {
             <select
               value={stockFilter}
               onChange={(e) => setStockFilter(e.target.value)}
-              className={`w-40 ${ADMIN_TOOLBAR_SELECT_CLASS}`}
+              className={`w-full sm:w-40 ${ADMIN_TOOLBAR_SELECT_CLASS}`}
             >
               <option value="all">All Stock</option>
               <option value="in">In Stock</option>
               <option value="out">Out Of Stock</option>
             </select>
 
-            <button
-              type="button"
-              onClick={() => router.push(ROUTES.admin.productCreate)}
-              className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap text-xs font-semibold transition-colors"
+            <Link
+              href={ROUTES.admin.productCreate}
+              className="inline-flex h-10 items-center px-5 rounded-xl bg-primary hover:bg-primary-hover text-white whitespace-nowrap text-xs font-semibold transition-colors shadow-sm"
             >
               Create Product
-            </button>
+            </Link>
 
-            <label className={ADMIN_TOOLBAR_BTN_CLASS}>
-              <Upload size={14} />
-              {importing ? "Importing..." : "Import Excel"}
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                onChange={handleExcelImport}
-                disabled={importing}
-              />
-            </label>
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={handleOpenSamplePreview}
+                className={ADMIN_TOOLBAR_BTN_CLASS}
+              >
+                <FileSpreadsheet size={14} />
+                Sample Excel
+              </button>
+
+              <label className={ADMIN_TOOLBAR_BTN_CLASS}>
+                <Upload size={14} />
+                {importing ? "Importing..." : "Import Excel"}
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleExcelImport}
+                  disabled={importing}
+                />
+              </label>
+            </div>
           </>
         }
         noDataMessage="No products found. Adjust filters or create a new product."
@@ -438,6 +544,16 @@ export default function ProductsPage() {
         rows={importResult?.rows ?? []}
         errors={importResult?.errors ?? []}
         onClose={() => setImportResult(null)}
+      />
+
+      <SampleExcelModal
+        open={samplePreviewOpen}
+        loading={sampleLoading}
+        error={sampleError}
+        sheets={sampleSheets}
+        downloadHref="/templates/product-import-template.xlsx"
+        downloadFileName="product-import-template.xlsx"
+        onClose={() => setSamplePreviewOpen(false)}
       />
     </AdminListLayout>
   );

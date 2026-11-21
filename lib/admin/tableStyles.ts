@@ -12,7 +12,7 @@ export const ADMIN_TABLE_DEFAULTS = {
 /** Shared table color tokens — used by DataTable and TableSkeleton */
 export const TABLE_THEME = {
   wrapper:
-    "rounded-2xl border border-border overflow-hidden shadow-lg bg-surface",
+    "rounded-2xl border border-border overflow-hidden shadow-sm theme-dark:shadow-xl bg-surface",
   headBg: "var(--table-head-bg)",
   headText: "var(--table-head-text)",
   rowBg: "var(--table-row-bg)",
@@ -27,11 +27,21 @@ export const TABLE_THEME = {
 
 export const ADMIN_TABLE_STYLES = {
   table: { style: { backgroundColor: "transparent" } },
+  headRow: {
+    style: {
+      backgroundColor: "var(--table-head-bg)",
+      borderBottomStyle: "solid",
+      borderBottomWidth: "1px",
+      borderBottomColor: "var(--table-row-border)",
+    },
+  },
   rows: {
     style: {
       backgroundColor: "var(--table-row-bg)",
       color: "var(--table-row-text)",
       minHeight: "68px",
+      borderBottomStyle: "solid",
+      borderBottomWidth: "1px",
       borderBottomColor: "var(--table-row-border)",
       "&:hover": { backgroundColor: "var(--table-row-hover)" },
     },
@@ -44,6 +54,11 @@ export const ADMIN_TABLE_STYLES = {
       fontSize: "11px",
       textTransform: "uppercase",
       letterSpacing: "0.05em",
+    },
+  },
+  cells: {
+    style: {
+      color: "var(--table-row-text)",
     },
   },
   pagination: {

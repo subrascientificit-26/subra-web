@@ -112,7 +112,7 @@ export default function SocialLinkEditor({
       </div>
 
       {errors[errorPrefix] ? (
-        <p className="text-sm font-medium text-red-400">{errors[errorPrefix]}</p>
+        <p className="text-sm font-medium text-red-600 theme-dark:text-red-400">{errors[errorPrefix]}</p>
       ) : null}
 
       {links.length === 0 ? (
@@ -178,7 +178,7 @@ export default function SocialLinkEditor({
                     <button
                       type="button"
                       onClick={() => removeLink(index)}
-                      className="rounded-lg border border-red-500/30 p-2 text-red-400 transition hover:bg-red-500/10"
+                      className="rounded-lg border border-red-500/40 p-2 text-red-600 theme-dark:text-red-400 transition hover:bg-red-500/10"
                       aria-label="Remove link"
                     >
                       <Trash2 size={16} />
